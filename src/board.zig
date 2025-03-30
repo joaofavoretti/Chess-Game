@@ -1,19 +1,22 @@
 const std = @import("std");
 const rl = @import("raylib");
 const p = @import("piece.zig");
-const IVector2 = @import("utils.zig").IVector2;
+const utils = @import("utils.zig");
+const IVector2 = utils.IVector2;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 
 pub const Board = struct {
     pieces: std.BoundedArray(Piece, 32),
+    selectedPiece: ?*Piece = null,
     tileSize: i32,
     offsetX: i32,
     offsetY: i32,
 
-    WHITE_TILE_COLOR: rl.Color,
-    BLACK_TILE_COLOR: rl.Color,
+    WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
+    BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
+    ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
 
     fn initPieces() std.BoundedArray(Piece, 32) {
         var pieces: std.BoundedArray(Piece, 32) = .{};
@@ -52,8 +55,6 @@ pub const Board = struct {
         const offsetY = @divTrunc((screenHeight - tileSize * 8), 2);
 
         return Board{
-            .WHITE_TILE_COLOR = rl.Color.init(232, 237, 249, 255),
-            .BLACK_TILE_COLOR = rl.Color.init(183, 192, 216, 255),
             .pieces = initPieces(),
             .tileSize = tileSize,
             .offsetX = offsetX,
@@ -83,7 +84,45 @@ pub const Board = struct {
         piece.draw(dest);
     }
 
+    fn isMouseOverBoard(self: *Board) bool {
+        const mousePos = IVector2.fromVector2(rl.getMousePosition());
+        return (mousePos.x >= self.offsetX and
+            mousePos.x < self.offsetX + self.tileSize * 8 and
+            mousePos.y >= self.offsetY and
+            mousePos.y < self.offsetY + self.tileSize * 8);
+    }
+
+    fn getMouseBoardPosition(self: *Board) IVector2 {
+        const mousePos = IVector2.fromVector2(rl.getMousePosition());
+        return IVector2.init(
+            @divTrunc(mousePos.x - self.offsetX, self.tileSize),
+            @divTrunc(mousePos.y - self.offsetY, self.tileSize),
+        );
+    }
+
+    fn verifyClickedPiece(self: *Board, deltaTime: f32) void {
+        _ = deltaTime;
+
+        if (self.isMouseOverBoard() and rl.isMouseButtonPressed(rl.MouseButton.left)) {
+            const mousePos = self.getMouseBoardPosition();
+
+            for (self.pieces.slice()) |*piece| {
+                if (utils.iVector2Eq(piece.pos, mousePos)) {
+                    self.selectedPiece = piece;
+                    return;
+                }
+            }
+
+            self.selectedPiece = null;
+        }
+    }
+
+    pub fn update(self: *Board, deltaTime: f32) void {
+        verifyClickedPiece(self, deltaTime);
+    }
+
     pub fn draw(self: *Board) void {
+        // Draw the board colors
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
             for (0..8) |j| {
@@ -107,6 +146,21 @@ pub const Board = struct {
             }
         }
 
+        // Draw the selected piece board color
+        if (self.selectedPiece) |piece| {
+            const x = self.offsetX + piece.pos.x * self.tileSize;
+            const y = self.offsetY + piece.pos.y * self.tileSize;
+
+            rl.drawRectangle(
+                x,
+                y,
+                self.tileSize,
+                self.tileSize,
+                self.ACTIVE_TILE_COLOR,
+            );
+        }
+
+        // Draw the pieces
         for (self.pieces.slice()) |*piece| {
             self.drawPiece(piece, piece.pos);
         }

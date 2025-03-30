@@ -23,9 +23,7 @@ fn setup() void {
 }
 
 fn update(deltaTime: f32) void {
-    if (deltaTime > 0.0) {
-        return;
-    }
+    state.board.update(deltaTime);
 }
 
 fn draw() void {
