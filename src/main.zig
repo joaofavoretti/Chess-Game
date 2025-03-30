@@ -31,10 +31,13 @@ fn draw() void {
     state.board.draw();
 }
 
-pub fn main() anyerror!void {
+pub fn main() !void {
     const screenWidth = 1024;
     const screenHeight = 768;
 
+    rl.setConfigFlags(rl.ConfigFlags{
+        .msaa_4x_hint = true,
+    });
     rl.initWindow(screenWidth, screenHeight, "Basic Window");
     defer rl.closeWindow();
 

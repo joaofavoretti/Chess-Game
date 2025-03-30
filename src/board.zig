@@ -23,26 +23,26 @@ pub const Board = struct {
 
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
-            pieces.append(Piece.init(IVector2.init(i_, 1), PieceColor.White, PieceType.Pawn)) catch unreachable;
-            pieces.append(Piece.init(IVector2.init(i_, 6), PieceColor.Black, PieceType.Pawn)) catch unreachable;
+            pieces.append(Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn)) catch unreachable;
+            pieces.append(Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn)) catch unreachable;
         }
 
-        pieces.append(Piece.init(IVector2.init(0, 0), PieceColor.White, PieceType.Rook)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(7, 0), PieceColor.White, PieceType.Rook)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(0, 7), PieceColor.Black, PieceType.Rook)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(7, 7), PieceColor.Black, PieceType.Rook)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(1, 0), PieceColor.White, PieceType.Knight)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(6, 0), PieceColor.White, PieceType.Knight)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(1, 7), PieceColor.Black, PieceType.Knight)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(6, 7), PieceColor.Black, PieceType.Knight)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(2, 0), PieceColor.White, PieceType.Bishop)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(5, 0), PieceColor.White, PieceType.Bishop)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(2, 7), PieceColor.Black, PieceType.Bishop)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(5, 7), PieceColor.Black, PieceType.Bishop)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(3, 0), PieceColor.White, PieceType.Queen)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(3, 7), PieceColor.Black, PieceType.Queen)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(4, 0), PieceColor.White, PieceType.King)) catch unreachable;
-        pieces.append(Piece.init(IVector2.init(4, 7), PieceColor.Black, PieceType.King)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King)) catch unreachable;
+        pieces.append(Piece.init(IVector2.init(4, 0), PieceColor.Black, PieceType.King)) catch unreachable;
 
         return pieces;
     }
@@ -158,6 +158,23 @@ pub const Board = struct {
                 self.tileSize,
                 self.ACTIVE_TILE_COLOR,
             );
+        }
+
+        // Draw the possible moves dots from the selected piece
+        if (self.selectedPiece) |piece| {
+            const moves = piece.getPossibleMoves() catch unreachable;
+
+            const radius = @divTrunc(self.tileSize, 8);
+            const padding = @divTrunc(self.tileSize - radius * 2, 2);
+
+            for (moves.items) |move| {
+                const center = rl.Vector2.init(
+                    @as(f32, @floatFromInt(self.offsetX + move.x * self.tileSize + padding + radius)),
+                    @as(f32, @floatFromInt(self.offsetY + move.y * self.tileSize + padding + radius)),
+                );
+
+                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.ACTIVE_TILE_COLOR);
+            }
         }
 
         // Draw the pieces
