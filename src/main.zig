@@ -14,12 +14,20 @@ const GameState = struct {
             .board = Board.init(),
         };
     }
+
+    pub fn deinit(self: *GameState) void {
+        self.board.deinit();
+    }
 };
 
 var state: GameState = undefined;
 
 fn setup() void {
     state = GameState.init();
+}
+
+fn destroy() void {
+    state.deinit();
 }
 
 fn update(deltaTime: f32) void {
@@ -44,6 +52,7 @@ pub fn main() !void {
     rl.setTargetFPS(60);
 
     setup();
+    defer destroy();
 
     while (!rl.windowShouldClose()) {
         const deltaTime: f32 = rl.getFrameTime();

@@ -55,15 +55,6 @@ pub const Piece = struct {
         };
     }
 
-    pub fn getPossibleMoves(self: *Piece) !std.ArrayList(IVector2) {
-        _ = self;
-
-        var list = std.ArrayList(IVector2).init(std.heap.page_allocator);
-        try list.append(IVector2.init(4, 4));
-        try list.append(IVector2.init(4, 5));
-        return list;
-    }
-
     pub fn getSize(self: *Piece) IVector2 {
         return IVector2.init(self.texture.width, self.texture.height);
     }
