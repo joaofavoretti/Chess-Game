@@ -10,7 +10,6 @@ const PieceType = p.PieceType;
 pub const Board = struct {
     pieces: std.AutoHashMap(IVector2, Piece),
     selectedPiece: ?*Piece = null,
-    possibleMoves: ?std.ArrayList(IVector2) = null,
     tileSize: i32,
     offsetX: i32,
     offsetY: i32,
@@ -18,6 +17,7 @@ pub const Board = struct {
     WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
     BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
     ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
+    POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 50),
 
     fn initPieces() std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -105,61 +105,56 @@ pub const Board = struct {
         );
     }
 
-    fn selectPiece(self: *Board, piece: *Piece) void {
-        self.selectedPiece = piece;
-        self.possibleMoves = self.getPossibleMoves(piece);
-    }
-
-    fn unselectPiece(self: *Board) void {
-        self.selectedPiece = null;
-
-        if (self.possibleMoves) |moves| {
-            moves.deinit();
-            self.possibleMoves = null;
-        }
-    }
-
     fn verifyClickedPiece(self: *Board, deltaTime: f32) void {
         _ = deltaTime;
 
         if (self.isMouseOverBoard() and rl.isMouseButtonPressed(rl.MouseButton.left)) {
             const mousePos = self.getMouseBoardPosition();
 
-            // Unselect the piece
+            // Unselect the piece if it was clicked again
             if (self.selectedPiece) |piece| {
                 if (utils.iVector2Eq(piece.pos, mousePos)) {
-                    self.unselectPiece();
+                    self.selectedPiece = null;
                     return;
                 }
             }
 
+            // Verify if the piece was clicked
             var it = self.pieces.iterator();
             while (it.next()) |entry| {
                 const piece = entry.value_ptr;
 
                 if (utils.iVector2Eq(piece.pos, mousePos)) {
-                    self.selectPiece(piece);
+                    self.selectedPiece = piece;
                     return;
                 }
             }
 
+            // Verify if the piece was moved to a possible square
             if (self.selectedPiece) |piece| {
-                if (self.possibleMoves) |moves| {
-                    for (moves.items) |move| {
-                        if (utils.iVector2Eq(move, mousePos)) {
-                            self.pieces.put(move, piece.*) catch unreachable;
-                            _ = self.pieces.remove(piece.pos);
-                            piece.pos = move;
-                            self.unselectPiece();
-                            return;
+                const moves = self.getPossibleMoves(piece);
+                for (moves.items) |move| {
+                    if (utils.iVector2Eq(move, mousePos)) {
+                        const newPiece = Piece.init(move, piece.color, piece.pieceType);
+
+                        if (self.pieces.remove(piece.pos)) {
+                            std.debug.print("Removed piece from the AutoHashMap\n", .{});
+                        } else {
+                            std.debug.print("Piece was not removed from the AutoHashMap\n", .{});
                         }
+
+                        self.pieces.put(move, newPiece) catch {
+                            std.debug.panic("Error moving piece to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
+                        };
+
+                        self.selectedPiece = null;
+                        return;
                     }
                 }
             }
 
-            if (self.selectedPiece) |_| {
-                self.unselectPiece();
-            }
+            // If clickeed outside the piece, unselect it
+            self.selectedPiece = null;
         }
     }
 
@@ -175,21 +170,7 @@ pub const Board = struct {
             PieceColor.Black => 1,
         };
 
-        const forwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward);
-        if (self.pieces.get(forwardPos) == null) {
-            moves.append(forwardPos) catch unreachable;
-        }
-
-        // Add the double move for the pawn
-        if (piece.pos.y == 1 and piece.color == PieceColor.Black or
-            piece.pos.y == 6 and piece.color == PieceColor.White)
-        {
-            const doubleForwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward * 2);
-            if (self.pieces.get(doubleForwardPos) == null) {
-                moves.append(doubleForwardPos) catch unreachable;
-            }
-        }
-
+        // Verifying capture moves
         const forwardLeftPos = IVector2.init(piece.pos.x - 1, piece.pos.y + forward);
         if (self.pieces.get(forwardLeftPos) != null) {
             moves.append(forwardLeftPos) catch unreachable;
@@ -198,6 +179,24 @@ pub const Board = struct {
         const forwardRightPos = IVector2.init(piece.pos.x + 1, piece.pos.y + forward);
         if (self.pieces.get(forwardRightPos) != null) {
             moves.append(forwardRightPos) catch unreachable;
+        }
+
+        // Verifying forward moves
+        const forwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward);
+        if (self.pieces.get(forwardPos) == null) {
+            moves.append(forwardPos) catch unreachable;
+        } else {
+            return moves;
+        }
+
+        // Verifying double forward move
+        if (piece.pos.y == 1 and piece.color == PieceColor.Black or
+            piece.pos.y == 6 and piece.color == PieceColor.White)
+        {
+            const doubleForwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward * 2);
+            if (self.pieces.get(doubleForwardPos) == null) {
+                moves.append(doubleForwardPos) catch unreachable;
+            }
         }
 
         return moves;
@@ -256,8 +255,18 @@ pub const Board = struct {
             );
         }
 
+        // Draw the pieces in the HashMap
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const pos = entry.key_ptr;
+            const piece = entry.value_ptr;
+            self.drawPiece(piece, pos.*);
+        }
+
         // Draw the possible moves dots from the selected piece
-        if (self.possibleMoves) |moves| {
+        if (self.selectedPiece) |piece| {
+            const moves = self.getPossibleMoves(piece);
+
             const radius = @divTrunc(self.tileSize, 8);
             const padding = @divTrunc(self.tileSize - radius * 2, 2);
 
@@ -267,16 +276,21 @@ pub const Board = struct {
                     @as(f32, @floatFromInt(self.offsetY + move.y * self.tileSize + padding + radius)),
                 );
 
-                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.ACTIVE_TILE_COLOR);
-            }
-        }
+                if (self.pieces.get(move) != null) {
+                    // Draw an outer circle when there is the possibility of capturing a piece
+                    const size = @as(f32, @floatFromInt(self.tileSize));
+                    const rect = rl.Rectangle{
+                        .x = @as(f32, @floatFromInt(self.offsetX + move.x * self.tileSize)) + 6.0,
+                        .y = @as(f32, @floatFromInt(self.offsetY + move.y * self.tileSize)) + 6.0,
+                        .width = size - 12.0,
+                        .height = size - 12.0,
+                    };
 
-        // Draw the pieces in the HashMap
-        var it = self.pieces.iterator();
-        while (it.next()) |entry| {
-            const pos = entry.key_ptr;
-            const piece = entry.value_ptr;
-            self.drawPiece(piece, pos.*);
+                    rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+                } else {
+                    rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+                }
+            }
         }
     }
 };
