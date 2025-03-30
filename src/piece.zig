@@ -1,6 +1,7 @@
 const std = @import("std");
 const path = std.fs.path;
 const rl = @import("raylib");
+const IVector2 = @import("utils.zig").IVector2;
 
 const TEXTURE_ASSET_PATH = "./assets";
 const TEXTURE_DEFAULT_PATH = "./assets/Default.png";
@@ -31,19 +32,39 @@ fn getTexture(pieceColor: PieceColor, pieceType: PieceType) rl.Texture2D {
 }
 
 pub const Piece = struct {
+    pos: IVector2,
     color: PieceColor,
     pieceType: PieceType,
     texture: rl.Texture2D = undefined,
 
-    pub fn init(color: PieceColor, pieceType: PieceType) Piece {
+    pub fn init(pos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
+        if (pos.x >= 8 or pos.y >= 8) {
+            return Piece{
+                .pos = IVector2.init(0, 0),
+                .color = PieceColor.White,
+                .pieceType = PieceType.Pawn,
+                .texture = rl.loadTexture(TEXTURE_DEFAULT_PATH) catch unreachable,
+            };
+        }
+
         return Piece{
+            .pos = pos,
             .color = color,
             .pieceType = pieceType,
             .texture = getTexture(color, pieceType),
         };
     }
 
-    pub fn draw(self: *Piece, pos: rl.Vector2) void {
-        rl.drawTextureV(self.texture, pos, rl.Color.white);
+    pub fn getSize(self: *Piece) IVector2 {
+        return IVector2.init(self.texture.width, self.texture.height);
+    }
+
+    pub fn draw(self: *Piece, dest: rl.Rectangle) void {
+        const tWidth = @as(f32, @floatFromInt(self.texture.width));
+        const tHeight = @as(f32, @floatFromInt(self.texture.height));
+        const source = rl.Rectangle.init(0, 0, tWidth, tHeight);
+        const origin = rl.Vector2.init(0, 0);
+
+        rl.drawTexturePro(self.texture, source, dest, origin, 0.0, rl.Color.white);
     }
 };

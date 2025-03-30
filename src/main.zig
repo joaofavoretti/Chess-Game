@@ -34,8 +34,8 @@ fn draw() void {
 }
 
 pub fn main() anyerror!void {
-    const screenWidth = 800;
-    const screenHeight = 450;
+    const screenWidth = 1024;
+    const screenHeight = 768;
 
     rl.initWindow(screenWidth, screenHeight, "Basic Window");
     defer rl.closeWindow();
