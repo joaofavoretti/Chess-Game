@@ -111,38 +111,36 @@ pub const Board = struct {
         };
     }
 
-    fn movePiece(self: *Board, piece: *Piece, newBoardPos: IVector2) void {
-        // Promoting the piece logic
-        if (piece.pieceType == PieceType.Pawn and
-            (newBoardPos.y == 0 or newBoardPos.y == 7))
-        {
-            piece.pieceType = PieceType.Queen;
+    fn movePiece(self: *Board, piece: *Piece, move: Move) void {
+        if (move.type == MoveType.Promotion) {
+            piece.pieceType = move.properties.Promotion.promotedTo;
         }
 
-        const newPiece = Piece.init(newBoardPos, piece.color, piece.pieceType);
+        const newPiece = Piece.init(move.to, piece.color, piece.pieceType);
+
+        if (move.type == MoveType.EnPassant) {
+            _ = self.pieces.remove(move.properties.EnPassant.capturedPiece.boardPos);
+        }
+
+        if (move.type == MoveType.Capture) {
+            _ = self.pieces.remove(move.properties.Capture.capturedPiece.boardPos);
+        }
 
         // Add the piece to the new position
-        self.pieces.put(newBoardPos, newPiece) catch {
+        self.pieces.put(move.to, newPiece) catch {
             std.debug.panic("Error moving piece to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
         };
 
         // Store that the last move was a double pawn move in case of en passant
-        if (piece.pieceType == PieceType.Pawn and
-            ((piece.boardPos.y == 1 and newBoardPos.y == 3) or
-                (piece.boardPos.y == 6 and newBoardPos.y == 4)))
-        {
+        if (move.type == MoveType.DoublePawn) {
             std.debug.print("Assigning possible en passant pawn\n", .{});
-            self.possibleEnPassantPawn = self.pieces.getPtr(newBoardPos);
+            self.possibleEnPassantPawn = self.pieces.getPtr(move.to);
         } else {
             self.possibleEnPassantPawn = null;
         }
 
         // Remove the piece from the old position
-        if (self.pieces.remove(piece.boardPos)) {
-            std.debug.print("Removed piece from the AutoHashMap\n", .{});
-        } else {
-            std.debug.print("Piece was not removed from the AutoHashMap\n", .{});
-        }
+        _ = self.pieces.remove(move.from);
 
         self.selectedPiece = null;
     }
@@ -181,7 +179,8 @@ pub const Board = struct {
                 const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
                 for (moves.items) |move| {
                     if (IVector2Eq(move.to, mousePos)) {
-                        self.movePiece(piece, move.to);
+                        self.movePiece(piece, move);
+                        self.isWhiteTurn = !self.isWhiteTurn;
                         return;
                     }
                 }
@@ -206,19 +205,21 @@ pub const Board = struct {
 
         // Verifying capture moves
         const forwardLeftPos = IVector2.init(piece.boardPos.x - 1, piece.boardPos.y + forward);
-        const forwardLeftPosPiece = self.pieces.get(forwardLeftPos);
-        if (forwardLeftPosPiece) |compPiece| {
-            if (compPiece.color != piece.color) {
-                const move = Move.init(piece, piece.boardPos, forwardLeftPos, MoveType.Capture);
+        const forwardLeftPosPiece = self.pieces.getPtr(forwardLeftPos);
+        if (forwardLeftPosPiece) |attackedPiece| {
+            if (attackedPiece.color != piece.color) {
+                var move = Move.init(piece, piece.boardPos, forwardLeftPos, MoveType.Capture);
+                move.properties.Capture.capturedPiece = attackedPiece;
                 try moves.append(move);
             }
         }
 
         const forwardRightPos = IVector2.init(piece.boardPos.x + 1, piece.boardPos.y + forward);
-        const forwardRightPosPiece = self.pieces.get(forwardRightPos);
-        if (forwardRightPosPiece) |compPiece| {
-            if (compPiece.color != piece.color) {
-                const move = Move.init(piece, piece.boardPos, forwardRightPos, MoveType.Capture);
+        const forwardRightPosPiece = self.pieces.getPtr(forwardRightPos);
+        if (forwardRightPosPiece) |attackedPiece| {
+            if (attackedPiece.color != piece.color) {
+                var move = Move.init(piece, piece.boardPos, forwardRightPos, MoveType.Capture);
+                move.properties.Capture.capturedPiece = attackedPiece;
                 try moves.append(move);
             }
         }
@@ -231,7 +232,8 @@ pub const Board = struct {
                         piece.boardPos.x == enPassantPawn.boardPos.x + 1))
                 {
                     const enPassantPos = IVector2.init(enPassantPawn.boardPos.x, enPassantPawn.boardPos.y + forward);
-                    const move = Move.init(piece, piece.boardPos, enPassantPos, MoveType.EnPassant);
+                    var move = Move.init(piece, piece.boardPos, enPassantPos, MoveType.EnPassant);
+                    move.properties.EnPassant.capturedPiece = enPassantPawn;
                     try moves.append(move);
                 }
             }
@@ -240,8 +242,14 @@ pub const Board = struct {
         // Verifying forward moves
         const forwardPos = IVector2.init(piece.boardPos.x, piece.boardPos.y + forward);
         if (self.pieces.get(forwardPos) == null) {
-            const move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Normal);
-            try moves.append(move);
+            if (forwardPos.y == 0 or forwardPos.y == 7) {
+                var move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Promotion);
+                move.properties.Promotion.promotedTo = PieceType.Queen;
+                try moves.append(move);
+            } else {
+                const move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Normal);
+                try moves.append(move);
+            }
         } else {
             return moves;
         }
@@ -331,7 +339,7 @@ pub const Board = struct {
                     @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize + padding + radius)),
                 );
 
-                if (self.pieces.get(move.to) != null) {
+                if (move.type == MoveType.Capture) {
                     const size = @as(f32, @floatFromInt(self.tileSize));
                     const rect = rl.Rectangle{
                         .x = @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize)) + 6.0,

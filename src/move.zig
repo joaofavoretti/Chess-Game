@@ -17,37 +17,64 @@ pub const Move = struct {
     piece: *Piece,
     from: IVector2,
     to: IVector2,
-    moveType: MoveType,
+    type: MoveType,
 
     // IDEA: Add extra information if the move type requires
-    // properties: union(MoveType) {
-    //     Normal: struct {
-    //         isCheck: bool,
-    //         isCheckmate: bool,
-    //         isStalemate: bool,
-    //     },
-    //     Capture: struct {
-    //         capturedPiece: *Piece,
-    //     },
-    //     EnPassant: struct {
-    //         capturedPiece: *Piece,
-    //     },
-    //     Castle: struct {
-    //         rook: *Piece,
-    //         rookFrom: IVector2,
-    //         rookTo: IVector2,
-    //     },
-    //     Promotion: struct {
-    //         promotedTo: PieceType,
-    //     },
-    // },
+    properties: union(MoveType) {
+        Normal: struct {
+            // isCheck: bool,
+            // isCheckmate: bool,
+            // isStalemate: bool,
+        },
+        DoublePawn: struct {},
+        Capture: struct {
+            capturedPiece: *Piece,
+        },
+        EnPassant: struct {
+            capturedPiece: *Piece,
+        },
+        Castle: struct {
+            // rook: *Piece,
+            // rookFrom: IVector2,
+            // rookTo: IVector2,
+        },
+        Promotion: struct {
+            promotedTo: PieceType,
+        },
+    },
 
     pub fn init(piece: *Piece, from: IVector2, to: IVector2, moveType: MoveType) Move {
         return Move{
             .piece = piece,
             .from = from,
             .to = to,
-            .moveType = moveType,
+            .type = moveType,
+            .properties = switch (moveType) {
+                MoveType.Normal => .{
+                    .Normal = .{},
+                },
+                MoveType.DoublePawn => .{
+                    .DoublePawn = .{},
+                },
+                MoveType.Capture => .{
+                    .Capture = .{
+                        .capturedPiece = undefined,
+                    },
+                },
+                MoveType.EnPassant => .{
+                    .EnPassant = .{
+                        .capturedPiece = undefined,
+                    },
+                },
+                MoveType.Castle => .{
+                    .Castle = .{},
+                },
+                MoveType.Promotion => .{
+                    .Promotion = .{
+                        .promotedTo = PieceType.Pawn,
+                    },
+                },
+            },
         };
     }
 };
