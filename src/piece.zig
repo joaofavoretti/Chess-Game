@@ -1,7 +1,7 @@
 const std = @import("std");
 const path = std.fs.path;
 const rl = @import("raylib");
-const IVector2 = @import("utils.zig").IVector2;
+const IVector2 = @import("utils/ivector.zig").IVector2;
 
 const TEXTURE_ASSET_PATH = "./assets";
 const TEXTURE_DEFAULT_PATH = "./assets/Default.png";
@@ -32,15 +32,15 @@ fn getTexture(pieceColor: PieceColor, pieceType: PieceType) rl.Texture2D {
 }
 
 pub const Piece = struct {
-    pos: IVector2,
+    boardPos: IVector2,
     color: PieceColor,
     pieceType: PieceType,
     texture: rl.Texture2D = undefined,
 
-    pub fn init(pos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
-        if (pos.x >= 8 or pos.y >= 8) {
+    pub fn init(boardPos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
+        if (boardPos.x >= 8 or boardPos.y >= 8) {
             return Piece{
-                .pos = IVector2.init(0, 0),
+                .boardPos = IVector2.init(0, 0),
                 .color = PieceColor.White,
                 .pieceType = PieceType.Pawn,
                 .texture = rl.loadTexture(TEXTURE_DEFAULT_PATH) catch unreachable,
@@ -48,7 +48,7 @@ pub const Piece = struct {
         }
 
         return Piece{
-            .pos = pos,
+            .boardPos = boardPos,
             .color = color,
             .pieceType = pieceType,
             .texture = getTexture(color, pieceType),

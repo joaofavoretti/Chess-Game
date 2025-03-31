@@ -1,49 +1,42 @@
+// Responsabilities of the Board module:
+// - Calculate the pieces possibleMoves;
+// - Draw the board;
+
 const std = @import("std");
 const rl = @import("raylib");
 const p = @import("piece.zig");
-const utils = @import("utils.zig");
-const IVector2 = utils.IVector2;
+const IVector2 = @import("utils/ivector.zig").IVector2;
+const IVector2Eq = @import("utils/ivector.zig").IVector2Eq;
+const Move = @import("move.zig").Move;
+const MoveType = @import("move.zig").MoveType;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 
 pub const Board = struct {
-    pieces: std.AutoHashMap(IVector2, Piece),
-    selectedPiece: ?*Piece = null,
-    tileSize: i32,
-    offsetX: i32,
-    offsetY: i32,
-
     WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
     BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
     ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
     POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 50),
 
-    fn initPieces() std.AutoHashMap(IVector2, Piece) {
+    pieces: std.AutoHashMap(IVector2, Piece),
+    tileSize: i32,
+    offsetX: i32,
+    offsetY: i32,
+
+    // Game Play logic
+    isWhiteTurn: bool = true,
+    selectedPiece: ?*Piece = null,
+    possibleEnPassantPawn: ?*Piece = null,
+
+    fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
 
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
-            pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn)) catch unreachable;
-            pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn)) catch unreachable;
+            try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
+            try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
         }
-
-        // pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook)) catch unreachable;
-        // pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook)) catch unreachable;
-        // pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook)) catch unreachable;
-        // pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook)) catch unreachable;
-        // pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight)) catch unreachable;
-        // pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight)) catch unreachable;
-        // pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight)) catch unreachable;
-        // pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight)) catch unreachable;
-        // pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop)) catch unreachable;
-        // pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop)) catch unreachable;
-        // pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop)) catch unreachable;
-        // pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop)) catch unreachable;
-        // pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen)) catch unreachable;
-        // pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen)) catch unreachable;
-        // pieces.put(IVector2.init(4, 7), Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King)) catch unreachable;
-        // pieces.put(IVector2.init(4, 0), Piece.init(IVector2.init(4, 0), PieceColor.Black, PieceType.King)) catch unreachable;
 
         return pieces;
     }
@@ -56,7 +49,9 @@ pub const Board = struct {
         const offsetY = @divTrunc((screenHeight - tileSize * 8), 2);
 
         return Board{
-            .pieces = initPieces(),
+            .pieces = initPieces() catch {
+                std.debug.panic("Error initializing the AutoHashMap\n", .{});
+            },
             .tileSize = tileSize,
             .offsetX = offsetX,
             .offsetY = offsetY,
@@ -67,7 +62,7 @@ pub const Board = struct {
         self.pieces.deinit();
     }
 
-    pub fn drawPiece(self: *Board, piece: *Piece, pos: IVector2) void {
+    fn drawPiece(self: *Board, piece: *Piece, pos: IVector2) void {
         if (pos.x >= 8 or pos.y >= 8) {
             return;
         }
@@ -98,11 +93,58 @@ pub const Board = struct {
     }
 
     fn getMouseBoardPosition(self: *Board) IVector2 {
+        if (!self.isMouseOverBoard()) {
+            return IVector2.init(0, 0);
+        }
+
         const mousePos = IVector2.fromVector2(rl.getMousePosition());
         return IVector2.init(
             @divTrunc(mousePos.x - self.offsetX, self.tileSize),
             @divTrunc(mousePos.y - self.offsetY, self.tileSize),
         );
+    }
+
+    fn getColorToMove(self: *Board) PieceColor {
+        return switch (self.isWhiteTurn) {
+            true => PieceColor.White,
+            false => PieceColor.Black,
+        };
+    }
+
+    fn movePiece(self: *Board, piece: *Piece, newBoardPos: IVector2) void {
+        // Promoting the piece logic
+        if (piece.pieceType == PieceType.Pawn and
+            (newBoardPos.y == 0 or newBoardPos.y == 7))
+        {
+            piece.pieceType = PieceType.Queen;
+        }
+
+        const newPiece = Piece.init(newBoardPos, piece.color, piece.pieceType);
+
+        // Add the piece to the new position
+        self.pieces.put(newBoardPos, newPiece) catch {
+            std.debug.panic("Error moving piece to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
+        };
+
+        // Store that the last move was a double pawn move in case of en passant
+        if (piece.pieceType == PieceType.Pawn and
+            ((piece.boardPos.y == 1 and newBoardPos.y == 3) or
+                (piece.boardPos.y == 6 and newBoardPos.y == 4)))
+        {
+            std.debug.print("Assigning possible en passant pawn\n", .{});
+            self.possibleEnPassantPawn = self.pieces.getPtr(newBoardPos);
+        } else {
+            self.possibleEnPassantPawn = null;
+        }
+
+        // Remove the piece from the old position
+        if (self.pieces.remove(piece.boardPos)) {
+            std.debug.print("Removed piece from the AutoHashMap\n", .{});
+        } else {
+            std.debug.print("Piece was not removed from the AutoHashMap\n", .{});
+        }
+
+        self.selectedPiece = null;
     }
 
     fn verifyClickedPiece(self: *Board, deltaTime: f32) void {
@@ -113,7 +155,7 @@ pub const Board = struct {
 
             // Unselect the piece if it was clicked again
             if (self.selectedPiece) |piece| {
-                if (utils.iVector2Eq(piece.pos, mousePos)) {
+                if (IVector2Eq(piece.boardPos, mousePos)) {
                     self.selectedPiece = null;
                     return;
                 }
@@ -124,7 +166,11 @@ pub const Board = struct {
             while (it.next()) |entry| {
                 const piece = entry.value_ptr;
 
-                if (utils.iVector2Eq(piece.pos, mousePos)) {
+                if (self.getColorToMove() != piece.color) {
+                    continue;
+                }
+
+                if (IVector2Eq(piece.boardPos, mousePos)) {
                     self.selectedPiece = piece;
                     return;
                 }
@@ -132,22 +178,10 @@ pub const Board = struct {
 
             // Verify if the piece was moved to a possible square
             if (self.selectedPiece) |piece| {
-                const moves = self.getPossibleMoves(piece);
+                const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
                 for (moves.items) |move| {
-                    if (utils.iVector2Eq(move, mousePos)) {
-                        const newPiece = Piece.init(move, piece.color, piece.pieceType);
-
-                        if (self.pieces.remove(piece.pos)) {
-                            std.debug.print("Removed piece from the AutoHashMap\n", .{});
-                        } else {
-                            std.debug.print("Piece was not removed from the AutoHashMap\n", .{});
-                        }
-
-                        self.pieces.put(move, newPiece) catch {
-                            std.debug.panic("Error moving piece to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
-                        };
-
-                        self.selectedPiece = null;
+                    if (IVector2Eq(move.to, mousePos)) {
+                        self.movePiece(piece, move.to);
                         return;
                     }
                 }
@@ -162,8 +196,8 @@ pub const Board = struct {
         verifyClickedPiece(self, deltaTime);
     }
 
-    pub fn getPawnPossibleMoves(self: *Board, piece: *Piece) std.ArrayList(IVector2) {
-        var moves = std.ArrayList(IVector2).init(std.heap.page_allocator);
+    fn getPawnPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
 
         const forward: i32 = switch (piece.color) {
             PieceColor.White => -1,
@@ -171,53 +205,71 @@ pub const Board = struct {
         };
 
         // Verifying capture moves
-        const forwardLeftPos = IVector2.init(piece.pos.x - 1, piece.pos.y + forward);
-        if (self.pieces.get(forwardLeftPos) != null) {
-            moves.append(forwardLeftPos) catch unreachable;
+        const forwardLeftPos = IVector2.init(piece.boardPos.x - 1, piece.boardPos.y + forward);
+        const forwardLeftPosPiece = self.pieces.get(forwardLeftPos);
+        if (forwardLeftPosPiece) |compPiece| {
+            if (compPiece.color != piece.color) {
+                const move = Move.init(piece, piece.boardPos, forwardLeftPos, MoveType.Capture);
+                try moves.append(move);
+            }
         }
 
-        const forwardRightPos = IVector2.init(piece.pos.x + 1, piece.pos.y + forward);
-        if (self.pieces.get(forwardRightPos) != null) {
-            moves.append(forwardRightPos) catch unreachable;
+        const forwardRightPos = IVector2.init(piece.boardPos.x + 1, piece.boardPos.y + forward);
+        const forwardRightPosPiece = self.pieces.get(forwardRightPos);
+        if (forwardRightPosPiece) |compPiece| {
+            if (compPiece.color != piece.color) {
+                const move = Move.init(piece, piece.boardPos, forwardRightPos, MoveType.Capture);
+                try moves.append(move);
+            }
+        }
+
+        // Verify en passant moves
+        if (self.possibleEnPassantPawn) |enPassantPawn| {
+            if (enPassantPawn.color != piece.color) {
+                if (piece.boardPos.y == enPassantPawn.boardPos.y and
+                    (piece.boardPos.x == enPassantPawn.boardPos.x - 1 or
+                        piece.boardPos.x == enPassantPawn.boardPos.x + 1))
+                {
+                    const enPassantPos = IVector2.init(enPassantPawn.boardPos.x, enPassantPawn.boardPos.y + forward);
+                    const move = Move.init(piece, piece.boardPos, enPassantPos, MoveType.EnPassant);
+                    try moves.append(move);
+                }
+            }
         }
 
         // Verifying forward moves
-        const forwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward);
+        const forwardPos = IVector2.init(piece.boardPos.x, piece.boardPos.y + forward);
         if (self.pieces.get(forwardPos) == null) {
-            moves.append(forwardPos) catch unreachable;
+            const move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Normal);
+            try moves.append(move);
         } else {
             return moves;
         }
 
         // Verifying double forward move
-        if (piece.pos.y == 1 and piece.color == PieceColor.Black or
-            piece.pos.y == 6 and piece.color == PieceColor.White)
+        if (piece.boardPos.y == 1 and piece.color == PieceColor.Black or
+            piece.boardPos.y == 6 and piece.color == PieceColor.White)
         {
-            const doubleForwardPos = IVector2.init(piece.pos.x, piece.pos.y + forward * 2);
+            const doubleForwardPos = IVector2.init(piece.boardPos.x, piece.boardPos.y + forward * 2);
             if (self.pieces.get(doubleForwardPos) == null) {
-                moves.append(doubleForwardPos) catch unreachable;
+                const move = Move.init(piece, piece.boardPos, doubleForwardPos, MoveType.DoublePawn);
+                try moves.append(move);
             }
         }
 
         return moves;
     }
 
-    pub fn getPossibleMoves(self: *Board, piece: *Piece) std.ArrayList(IVector2) {
+    fn getPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = switch (piece.pieceType) {
-            PieceType.Pawn => self.getPawnPossibleMoves(piece),
-            // PieceType.Rook => self.getRookPossibleMoves(piece, moves),
-            // PieceType.Knight => self.getKnightPossibleMoves(piece, moves),
-            // PieceType.Bishop => self.getBishopPossibleMoves(piece, moves),
-            // PieceType.Queen => self.getQueenPossibleMoves(piece, moves),
-            // PieceType.King => self.getKingPossibleMoves(piece, moves),
-            else => std.ArrayList(IVector2).init(std.heap.page_allocator),
+            PieceType.Pawn => try self.getPawnPossibleMoves(piece),
+            else => std.ArrayList(Move).init(std.heap.page_allocator),
         };
 
         return moves;
     }
 
-    pub fn draw(self: *Board) void {
-        // Draw the board colors
+    fn drawBoard(self: *Board) void {
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
             for (0..8) |j| {
@@ -240,11 +292,12 @@ pub const Board = struct {
                 );
             }
         }
+    }
 
-        // Draw the selected piece board color
+    fn drawSelectedPieceTile(self: *Board) void {
         if (self.selectedPiece) |piece| {
-            const x = self.offsetX + piece.pos.x * self.tileSize;
-            const y = self.offsetY + piece.pos.y * self.tileSize;
+            const x = self.offsetX + piece.boardPos.x * self.tileSize;
+            const y = self.offsetY + piece.boardPos.y * self.tileSize;
 
             rl.drawRectangle(
                 x,
@@ -254,34 +307,35 @@ pub const Board = struct {
                 self.ACTIVE_TILE_COLOR,
             );
         }
+    }
 
-        // Draw the pieces in the HashMap
+    fn drawPieces(self: *Board) void {
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
             const pos = entry.key_ptr;
             const piece = entry.value_ptr;
             self.drawPiece(piece, pos.*);
         }
+    }
 
-        // Draw the possible moves dots from the selected piece
+    fn drawPossibleMoves(self: *Board) void {
         if (self.selectedPiece) |piece| {
-            const moves = self.getPossibleMoves(piece);
+            const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
 
             const radius = @divTrunc(self.tileSize, 8);
             const padding = @divTrunc(self.tileSize - radius * 2, 2);
 
             for (moves.items) |move| {
                 const center = rl.Vector2.init(
-                    @as(f32, @floatFromInt(self.offsetX + move.x * self.tileSize + padding + radius)),
-                    @as(f32, @floatFromInt(self.offsetY + move.y * self.tileSize + padding + radius)),
+                    @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize + padding + radius)),
+                    @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize + padding + radius)),
                 );
 
-                if (self.pieces.get(move) != null) {
-                    // Draw an outer circle when there is the possibility of capturing a piece
+                if (self.pieces.get(move.to) != null) {
                     const size = @as(f32, @floatFromInt(self.tileSize));
                     const rect = rl.Rectangle{
-                        .x = @as(f32, @floatFromInt(self.offsetX + move.x * self.tileSize)) + 6.0,
-                        .y = @as(f32, @floatFromInt(self.offsetY + move.y * self.tileSize)) + 6.0,
+                        .x = @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize)) + 6.0,
+                        .y = @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize)) + 6.0,
                         .width = size - 12.0,
                         .height = size - 12.0,
                     };
@@ -292,5 +346,12 @@ pub const Board = struct {
                 }
             }
         }
+    }
+
+    pub fn draw(self: *Board) void {
+        self.drawBoard();
+        self.drawSelectedPieceTile();
+        self.drawPieces();
+        self.drawPossibleMoves();
     }
 };
