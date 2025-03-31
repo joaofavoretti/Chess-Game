@@ -22,24 +22,24 @@ pub const Move = struct {
     // IDEA: Add extra information if the move type requires
     properties: union(MoveType) {
         Normal: struct {
-            // isCheck: bool,
-            // isCheckmate: bool,
-            // isStalemate: bool,
+            isCheck: bool = false,
+            isCheckmate: bool = false,
+            isStalemate: bool = false,
         },
         DoublePawn: struct {},
         Capture: struct {
-            capturedPiece: *Piece,
+            capturedPiece: *Piece = undefined,
         },
         EnPassant: struct {
-            capturedPiece: *Piece,
+            capturedPiece: *Piece = undefined,
         },
         Castle: struct {
-            // rook: *Piece,
-            // rookFrom: IVector2,
-            // rookTo: IVector2,
+            rook: *Piece = undefined,
+            rookFrom: IVector2 = IVector2.init(0, 0),
+            rookTo: IVector2 = IVector2.init(0, 0),
         },
         Promotion: struct {
-            promotedTo: PieceType,
+            promotedTo: PieceType = PieceType.Queen,
         },
     },
 
@@ -57,22 +57,16 @@ pub const Move = struct {
                     .DoublePawn = .{},
                 },
                 MoveType.Capture => .{
-                    .Capture = .{
-                        .capturedPiece = undefined,
-                    },
+                    .Capture = .{},
                 },
                 MoveType.EnPassant => .{
-                    .EnPassant = .{
-                        .capturedPiece = undefined,
-                    },
+                    .EnPassant = .{},
                 },
                 MoveType.Castle => .{
                     .Castle = .{},
                 },
                 MoveType.Promotion => .{
-                    .Promotion = .{
-                        .promotedTo = PieceType.Pawn,
-                    },
+                    .Promotion = .{},
                 },
             },
         };
