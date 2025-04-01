@@ -31,3 +31,7 @@ pub const IVector2 = struct {
 pub fn IVector2Eq(a: IVector2, b: IVector2) bool {
     return a.eql(b);
 }
+
+pub fn IVector2Add(a: IVector2, b: IVector2) IVector2 {
+    return IVector2.init(a.x + b.x, a.y + b.y);
+}

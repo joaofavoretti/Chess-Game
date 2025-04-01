@@ -7,6 +7,7 @@ const rl = @import("raylib");
 const p = @import("piece.zig");
 const IVector2 = @import("utils/ivector.zig").IVector2;
 const IVector2Eq = @import("utils/ivector.zig").IVector2Eq;
+const IVector2Add = @import("utils/ivector.zig").IVector2Add;
 const Move = @import("move.zig").Move;
 const MoveType = @import("move.zig").MoveType;
 const Piece = p.Piece;
@@ -37,6 +38,11 @@ pub const Board = struct {
             try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
             try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
         }
+
+        try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
+        try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
+        try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
+        try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
 
         return pieces;
     }
@@ -272,9 +278,44 @@ pub const Board = struct {
         return moves;
     }
 
+    fn getRookPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+
+        const directions = [_]IVector2{
+            IVector2.init(1, 0),
+            IVector2.init(-1, 0),
+            IVector2.init(0, 1),
+            IVector2.init(0, -1),
+        };
+
+        for (directions) |dir| {
+            var pos = IVector2Add(piece.boardPos, dir);
+            while (pos.x >= 0 and pos.x < 8 and pos.y >= 0 and pos.y < 8) {
+                const pieceAtPos = self.pieces.getPtr(pos);
+                if (pieceAtPos) |attackedPiece| {
+                    if (attackedPiece.color != piece.color) {
+                        const move = Move.init(piece, piece.boardPos, pos, .{
+                            .Capture = .{ .capturedPiece = attackedPiece },
+                        });
+                        try moves.append(move);
+                    }
+                    break;
+                } else {
+                    const move = Move.init(piece, piece.boardPos, pos, .{ .Normal = .{} });
+                    try moves.append(move);
+                }
+
+                pos = IVector2Add(pos, dir);
+            }
+        }
+
+        return moves;
+    }
+
     fn getPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = switch (piece.pieceType) {
             PieceType.Pawn => try self.getPawnPossibleMoves(piece),
+            PieceType.Rook => try self.getRookPossibleMoves(piece),
             else => std.ArrayList(Move).init(std.heap.page_allocator),
         };
 
