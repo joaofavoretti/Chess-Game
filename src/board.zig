@@ -112,17 +112,17 @@ pub const Board = struct {
     }
 
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
-        if (move.type == MoveType.Promotion) {
+        if (move.getType() == MoveType.Promotion) {
             piece.pieceType = move.properties.Promotion.promotedTo;
         }
 
         const newPiece = Piece.init(move.to, piece.color, piece.pieceType);
 
-        if (move.type == MoveType.EnPassant) {
+        if (move.getType() == MoveType.EnPassant) {
             _ = self.pieces.remove(move.properties.EnPassant.capturedPiece.boardPos);
         }
 
-        if (move.type == MoveType.Capture) {
+        if (move.getType() == MoveType.Capture) {
             _ = self.pieces.remove(move.properties.Capture.capturedPiece.boardPos);
         }
 
@@ -132,7 +132,7 @@ pub const Board = struct {
         };
 
         // Store that the last move was a double pawn move in case of en passant
-        if (move.type == MoveType.DoublePawn) {
+        if (move.getType() == MoveType.DoublePawn) {
             std.debug.print("Assigning possible en passant pawn\n", .{});
             self.possibleEnPassantPawn = self.pieces.getPtr(move.to);
         } else {
@@ -208,8 +208,9 @@ pub const Board = struct {
         const forwardLeftPosPiece = self.pieces.getPtr(forwardLeftPos);
         if (forwardLeftPosPiece) |attackedPiece| {
             if (attackedPiece.color != piece.color) {
-                var move = Move.init(piece, piece.boardPos, forwardLeftPos, MoveType.Capture);
-                move.properties.Capture.capturedPiece = attackedPiece;
+                const move = Move.init(piece, piece.boardPos, forwardLeftPos, .{
+                    .Capture = .{ .capturedPiece = attackedPiece },
+                });
                 try moves.append(move);
             }
         }
@@ -218,8 +219,9 @@ pub const Board = struct {
         const forwardRightPosPiece = self.pieces.getPtr(forwardRightPos);
         if (forwardRightPosPiece) |attackedPiece| {
             if (attackedPiece.color != piece.color) {
-                var move = Move.init(piece, piece.boardPos, forwardRightPos, MoveType.Capture);
-                move.properties.Capture.capturedPiece = attackedPiece;
+                const move = Move.init(piece, piece.boardPos, forwardRightPos, .{
+                    .Capture = .{ .capturedPiece = attackedPiece },
+                });
                 try moves.append(move);
             }
         }
@@ -232,8 +234,9 @@ pub const Board = struct {
                         piece.boardPos.x == enPassantPawn.boardPos.x + 1))
                 {
                     const enPassantPos = IVector2.init(enPassantPawn.boardPos.x, enPassantPawn.boardPos.y + forward);
-                    var move = Move.init(piece, piece.boardPos, enPassantPos, MoveType.EnPassant);
-                    move.properties.EnPassant.capturedPiece = enPassantPawn;
+                    const move = Move.init(piece, piece.boardPos, enPassantPos, .{
+                        .EnPassant = .{ .capturedPiece = enPassantPawn },
+                    });
                     try moves.append(move);
                 }
             }
@@ -243,11 +246,12 @@ pub const Board = struct {
         const forwardPos = IVector2.init(piece.boardPos.x, piece.boardPos.y + forward);
         if (self.pieces.get(forwardPos) == null) {
             if (forwardPos.y == 0 or forwardPos.y == 7) {
-                var move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Promotion);
-                move.properties.Promotion.promotedTo = PieceType.Queen;
+                const move = Move.init(piece, piece.boardPos, forwardPos, .{
+                    .Promotion = .{ .promotedTo = PieceType.Queen },
+                });
                 try moves.append(move);
             } else {
-                const move = Move.init(piece, piece.boardPos, forwardPos, MoveType.Normal);
+                const move = Move.init(piece, piece.boardPos, forwardPos, .{ .Normal = .{} });
                 try moves.append(move);
             }
         } else {
@@ -260,7 +264,7 @@ pub const Board = struct {
         {
             const doubleForwardPos = IVector2.init(piece.boardPos.x, piece.boardPos.y + forward * 2);
             if (self.pieces.get(doubleForwardPos) == null) {
-                const move = Move.init(piece, piece.boardPos, doubleForwardPos, MoveType.DoublePawn);
+                const move = Move.init(piece, piece.boardPos, doubleForwardPos, .{ .DoublePawn = .{} });
                 try moves.append(move);
             }
         }
@@ -339,7 +343,7 @@ pub const Board = struct {
                     @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize + padding + radius)),
                 );
 
-                if (move.type == MoveType.Capture) {
+                if (move.getType() == MoveType.Capture) {
                     const size = @as(f32, @floatFromInt(self.tileSize));
                     const rect = rl.Rectangle{
                         .x = @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize)) + 6.0,
