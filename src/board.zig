@@ -54,6 +54,9 @@ pub const Board = struct {
         try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
         try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
 
+        try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
+        try pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen));
+
         return pieces;
     }
 
@@ -398,12 +401,51 @@ pub const Board = struct {
         return moves;
     }
 
+    fn getQueenPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+
+        const directions = [_]IVector2{
+            IVector2.init(1, 0),
+            IVector2.init(-1, 0),
+            IVector2.init(0, 1),
+            IVector2.init(0, -1),
+            IVector2.init(1, 1),
+            IVector2.init(1, -1),
+            IVector2.init(-1, -1),
+            IVector2.init(-1, 1),
+        };
+
+        for (directions) |dir| {
+            var pos = IVector2Add(piece.boardPos, dir);
+            while (self.isPositionOverBoard(pos)) {
+                const pieceAtPos = self.pieces.getPtr(pos);
+                if (pieceAtPos) |attackedPiece| {
+                    if (attackedPiece.color != piece.color) {
+                        const move = Move.init(piece, piece.boardPos, pos, .{
+                            .Capture = .{ .capturedPiece = attackedPiece },
+                        });
+                        try moves.append(move);
+                    }
+                    break;
+                } else {
+                    const move = Move.init(piece, piece.boardPos, pos, .{ .Normal = .{} });
+                    try moves.append(move);
+                }
+
+                pos = IVector2Add(pos, dir);
+            }
+        }
+
+        return moves;
+    }
+
     fn getPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = switch (piece.pieceType) {
             PieceType.Pawn => try self.getPawnPossibleMoves(piece),
             PieceType.Rook => try self.getRookPossibleMoves(piece),
             PieceType.Knight => try self.getKnightPossibleMoves(piece),
             PieceType.Bishop => try self.getBishopPossibleMoves(piece),
+            PieceType.Queen => try self.getQueenPossibleMoves(piece),
             else => std.ArrayList(Move).init(std.heap.page_allocator),
         };
 
