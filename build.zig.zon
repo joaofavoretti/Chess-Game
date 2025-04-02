@@ -40,6 +40,10 @@
             .url = "git+https://github.com/Not-Nik/raylib-zig?ref=devel#8d5a7d382c75fecfa6b8ce82577c1bba50caea99",
             .hash = "raylib_zig-5.6.0-dev-KE8REHguBQAE0xoNkra7mtEqr8cCZHk7k_03txLZB-cZ",
         },
+        .ziglangSet = .{
+            .url = "git+https://github.com/deckarep/ziglang-set.git#1907fc6cd76caace357091f6e229cb417677b522",
+            .hash = "ziglangSet-0.0.1-VUjv0poUAgCNnJ8mjuXpZ81KSDap5Nmd_WLb7hFRS18f",
+        },
     },
     .paths = .{
         "build.zig",

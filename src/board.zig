@@ -5,6 +5,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const p = @import("piece.zig");
+const set = @import("ziglangSet");
 const IVector2 = @import("utils/ivector.zig").IVector2;
 const IVector2Eq = @import("utils/ivector.zig").IVector2Eq;
 const IVector2Add = @import("utils/ivector.zig").IVector2Add;
@@ -29,6 +30,7 @@ pub const Board = struct {
     isWhiteTurn: bool = true,
     selectedPiece: ?*Piece = null,
     possibleEnPassantPawn: ?*Piece = null,
+    unusedRooks: set.Set(*Piece),
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -57,7 +59,24 @@ pub const Board = struct {
         try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
         try pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen));
 
+        try pieces.put(IVector2.init(4, 7), Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King));
+        try pieces.put(IVector2.init(4, 0), Piece.init(IVector2.init(4, 0), PieceColor.Black, PieceType.King));
+
         return pieces;
+    }
+
+    fn initUnusedRooks(pieces: std.AutoHashMap(IVector2, Piece)) !set.Set(*Piece) {
+        var unusedRooks = set.Set(*Piece).init(std.heap.page_allocator);
+
+        var it = pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.pieceType == PieceType.Rook) {
+                _ = try unusedRooks.add(piece);
+            }
+        }
+
+        return unusedRooks;
     }
 
     pub fn init() Board {
@@ -67,10 +86,17 @@ pub const Board = struct {
         const offsetX = @divTrunc((screenWidth - tileSize * 8), 2);
         const offsetY = @divTrunc((screenHeight - tileSize * 8), 2);
 
+        const pieces = initPieces() catch {
+            std.debug.panic("Error initializing the AutoHashMap\n", .{});
+        };
+
+        const unusedRooks = initUnusedRooks(pieces) catch {
+            std.debug.panic("Error initializing the Set\n", .{});
+        };
+
         return Board{
-            .pieces = initPieces() catch {
-                std.debug.panic("Error initializing the AutoHashMap\n", .{});
-            },
+            .pieces = pieces,
+            .unusedRooks = unusedRooks,
             .tileSize = tileSize,
             .offsetX = offsetX,
             .offsetY = offsetY,
@@ -160,6 +186,11 @@ pub const Board = struct {
             self.possibleEnPassantPawn = self.pieces.getPtr(move.to);
         } else {
             self.possibleEnPassantPawn = null;
+        }
+
+        // Store the rook that was moved in case of castling
+        if (self.unusedRooks.contains(piece)) {
+            _ = self.unusedRooks.remove(piece);
         }
 
         // Remove the piece from the old position
@@ -536,5 +567,12 @@ pub const Board = struct {
         self.drawSelectedPieceTile();
         self.drawPieces();
         self.drawPossibleMoves();
+
+        var it = self.unusedRooks.iterator();
+        while (it.next()) |rook| {
+            const x = self.offsetX + rook.*.boardPos.x * self.tileSize;
+            const y = self.offsetY + rook.*.boardPos.y * self.tileSize;
+            rl.drawRectangle(x, y, self.tileSize, self.tileSize, self.ACTIVE_TILE_COLOR);
+        }
     }
 };

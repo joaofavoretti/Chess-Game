@@ -46,6 +46,12 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("raygui", raygui);
 
+    const ziglangSet = b.dependency("ziglangSet", .{});
+    // const ziglangSet_artifact = ziglangSet.artifact("ziglangSet");
+    // exe.linkLibrary(ziglangSet_artifact);
+
+    exe.root_module.addImport("ziglangSet", ziglangSet.module("ziglangSet"));
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
