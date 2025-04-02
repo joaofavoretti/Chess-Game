@@ -31,6 +31,7 @@ pub const Board = struct {
     selectedPiece: ?*Piece = null,
     possibleEnPassantPawn: ?*Piece = null,
     unusedRooks: set.Set(*Piece),
+    unusedKings: set.Set(*Piece),
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -79,6 +80,20 @@ pub const Board = struct {
         return unusedRooks;
     }
 
+    fn initUnusedKings(pieces: std.AutoHashMap(IVector2, Piece)) !set.Set(*Piece) {
+        var unusedKings = set.Set(*Piece).init(std.heap.page_allocator);
+
+        var it = pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.pieceType == PieceType.King) {
+                _ = try unusedKings.add(piece);
+            }
+        }
+
+        return unusedKings;
+    }
+
     pub fn init() Board {
         const screenWidth = @as(i32, @intCast(rl.getScreenWidth()));
         const screenHeight = @as(i32, @intCast(rl.getScreenHeight()));
@@ -94,9 +109,14 @@ pub const Board = struct {
             std.debug.panic("Error initializing the Set\n", .{});
         };
 
+        const unusedKings = initUnusedKings(pieces) catch {
+            std.debug.panic("Error initializing the Set\n", .{});
+        };
+
         return Board{
             .pieces = pieces,
             .unusedRooks = unusedRooks,
+            .unusedKings = unusedKings,
             .tileSize = tileSize,
             .offsetX = offsetX,
             .offsetY = offsetY,
@@ -193,8 +213,21 @@ pub const Board = struct {
             _ = self.unusedRooks.remove(piece);
         }
 
+        // Store the king that was moved in case of castling
+        if (self.unusedKings.contains(piece)) {
+            _ = self.unusedKings.remove(piece);
+        }
+
         // Remove the piece from the old position
         _ = self.pieces.remove(move.from);
+
+        if (move.getType() == MoveType.Castle) {
+            const newRook = Piece.init(move.properties.Castle.rookTo, move.properties.Castle.rook.color, move.properties.Castle.rook.pieceType);
+            _ = self.pieces.remove(move.properties.Castle.rookFrom);
+            self.pieces.put(move.properties.Castle.rookTo, newRook) catch {
+                std.debug.panic("Error moving rook to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
+            };
+        }
 
         self.selectedPiece = null;
     }
@@ -470,6 +503,83 @@ pub const Board = struct {
         return moves;
     }
 
+    fn getKingPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+
+        const directions = [_]IVector2{
+            IVector2.init(1, 0),
+            IVector2.init(-1, 0),
+            IVector2.init(0, 1),
+            IVector2.init(0, -1),
+            IVector2.init(1, 1),
+            IVector2.init(1, -1),
+            IVector2.init(-1, -1),
+            IVector2.init(-1, 1),
+        };
+
+        // Normal and Capture moves
+        for (directions) |dir| {
+            const pos = IVector2Add(piece.boardPos, dir);
+
+            if (!self.isPositionOverBoard(pos)) {
+                continue;
+            }
+
+            const pieceAtPos = self.pieces.getPtr(pos);
+            if (pieceAtPos) |attackedPiece| {
+                if (attackedPiece.color != piece.color) {
+                    const move = Move.init(piece, piece.boardPos, pos, .{
+                        .Capture = .{ .capturedPiece = attackedPiece },
+                    });
+                    try moves.append(move);
+                }
+            } else {
+                const move = Move.init(piece, piece.boardPos, pos, .{ .Normal = .{} });
+                try moves.append(move);
+            }
+        }
+
+        // Castling moves
+        if (self.unusedKings.contains(piece)) {
+            const leftRook = self.pieces.getPtr(IVector2.init(0, piece.boardPos.y));
+            if (leftRook) |rook| {
+                if (self.unusedRooks.contains(rook) and
+                    self.pieces.get(IVector2.init(1, piece.boardPos.y)) == null and
+                    self.pieces.get(IVector2.init(2, piece.boardPos.y)) == null and
+                    self.pieces.get(IVector2.init(3, piece.boardPos.y)) == null)
+                {
+                    const move = Move.init(piece, piece.boardPos, IVector2.init(2, piece.boardPos.y), .{
+                        .Castle = .{
+                            .rook = rook,
+                            .rookFrom = IVector2.init(0, piece.boardPos.y),
+                            .rookTo = IVector2.init(3, piece.boardPos.y),
+                        },
+                    });
+                    try moves.append(move);
+                }
+            }
+
+            const rightRook = self.pieces.getPtr(IVector2.init(7, piece.boardPos.y));
+            if (rightRook) |rook| {
+                if (self.unusedRooks.contains(rook) and
+                    self.pieces.get(IVector2.init(5, piece.boardPos.y)) == null and
+                    self.pieces.get(IVector2.init(6, piece.boardPos.y)) == null)
+                {
+                    const move = Move.init(piece, piece.boardPos, IVector2.init(6, piece.boardPos.y), .{
+                        .Castle = .{
+                            .rook = rook,
+                            .rookFrom = IVector2.init(7, piece.boardPos.y),
+                            .rookTo = IVector2.init(5, piece.boardPos.y),
+                        },
+                    });
+                    try moves.append(move);
+                }
+            }
+        }
+
+        return moves;
+    }
+
     fn getPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = switch (piece.pieceType) {
             PieceType.Pawn => try self.getPawnPossibleMoves(piece),
@@ -477,7 +587,7 @@ pub const Board = struct {
             PieceType.Knight => try self.getKnightPossibleMoves(piece),
             PieceType.Bishop => try self.getBishopPossibleMoves(piece),
             PieceType.Queen => try self.getQueenPossibleMoves(piece),
-            else => std.ArrayList(Move).init(std.heap.page_allocator),
+            PieceType.King => try self.getKingPossibleMoves(piece),
         };
 
         return moves;
@@ -567,12 +677,5 @@ pub const Board = struct {
         self.drawSelectedPieceTile();
         self.drawPieces();
         self.drawPossibleMoves();
-
-        var it = self.unusedRooks.iterator();
-        while (it.next()) |rook| {
-            const x = self.offsetX + rook.*.boardPos.x * self.tileSize;
-            const y = self.offsetY + rook.*.boardPos.y * self.tileSize;
-            rl.drawRectangle(x, y, self.tileSize, self.tileSize, self.ACTIVE_TILE_COLOR);
-        }
     }
 };

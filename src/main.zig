@@ -46,7 +46,7 @@ pub fn main() !void {
     rl.setConfigFlags(rl.ConfigFlags{
         .msaa_4x_hint = true,
     });
-    rl.initWindow(screenWidth, screenHeight, "Basic Window");
+    rl.initWindow(screenWidth, screenHeight, "Chess");
     defer rl.closeWindow();
 
     rl.setTargetFPS(60);
