@@ -44,6 +44,11 @@ pub const Board = struct {
         try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
         try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
 
+        try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
+        try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
+        try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
+        try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
+
         return pieces;
     }
 
@@ -96,6 +101,10 @@ pub const Board = struct {
             mousePos.x < self.offsetX + self.tileSize * 8 and
             mousePos.y >= self.offsetY and
             mousePos.y < self.offsetY + self.tileSize * 8);
+    }
+
+    fn isPositionOverBoard(_: *Board, pos: IVector2) bool {
+        return (pos.x >= 0 and pos.x < 8 and pos.y >= 0 and pos.y < 8);
     }
 
     fn getMouseBoardPosition(self: *Board) IVector2 {
@@ -290,7 +299,7 @@ pub const Board = struct {
 
         for (directions) |dir| {
             var pos = IVector2Add(piece.boardPos, dir);
-            while (pos.x >= 0 and pos.x < 8 and pos.y >= 0 and pos.y < 8) {
+            while (self.isPositionOverBoard(pos)) {
                 const pieceAtPos = self.pieces.getPtr(pos);
                 if (pieceAtPos) |attackedPiece| {
                     if (attackedPiece.color != piece.color) {
@@ -312,10 +321,49 @@ pub const Board = struct {
         return moves;
     }
 
+    fn getKnightPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+
+        const directions = [_]IVector2{
+            IVector2.init(1, 2),
+            IVector2.init(2, 1),
+            IVector2.init(2, -1),
+            IVector2.init(1, -2),
+            IVector2.init(-1, -2),
+            IVector2.init(-2, -1),
+            IVector2.init(-2, 1),
+            IVector2.init(-1, 2),
+        };
+
+        for (directions) |dir| {
+            const pos = IVector2Add(piece.boardPos, dir);
+
+            if (!self.isPositionOverBoard(pos)) {
+                continue;
+            }
+
+            const pieceAtPos = self.pieces.getPtr(pos);
+            if (pieceAtPos) |attackedPiece| {
+                if (attackedPiece.color != piece.color) {
+                    const move = Move.init(piece, piece.boardPos, pos, .{
+                        .Capture = .{ .capturedPiece = attackedPiece },
+                    });
+                    try moves.append(move);
+                }
+            } else {
+                const move = Move.init(piece, piece.boardPos, pos, .{ .Normal = .{} });
+                try moves.append(move);
+            }
+        }
+
+        return moves;
+    }
+
     fn getPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = switch (piece.pieceType) {
             PieceType.Pawn => try self.getPawnPossibleMoves(piece),
             PieceType.Rook => try self.getRookPossibleMoves(piece),
+            PieceType.Knight => try self.getKnightPossibleMoves(piece),
             else => std.ArrayList(Move).init(std.heap.page_allocator),
         };
 
