@@ -55,6 +55,23 @@ pub const Piece = struct {
         };
     }
 
+    pub fn initUndrawable(boardPos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
+        return Piece{
+            .boardPos = boardPos,
+            .color = color,
+            .pieceType = pieceType,
+        };
+    }
+
+    pub fn getCopy(self: *Piece) Piece {
+        return Piece{
+            .boardPos = self.boardPos,
+            .color = self.color,
+            .pieceType = self.pieceType,
+            .texture = self.texture,
+        };
+    }
+
     pub fn getSize(self: *Piece) IVector2 {
         return IVector2.init(self.texture.width, self.texture.height);
     }

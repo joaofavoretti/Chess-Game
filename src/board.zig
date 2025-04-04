@@ -32,6 +32,7 @@ pub const Board = struct {
     possibleEnPassantPawn: ?*Piece = null,
     unusedRooks: set.Set(*Piece),
     unusedKings: set.Set(*Piece),
+    gameOver: bool = false,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -125,6 +126,8 @@ pub const Board = struct {
 
     pub fn deinit(self: *Board) void {
         self.pieces.deinit();
+        self.unusedRooks.deinit();
+        self.unusedKings.deinit();
     }
 
     fn drawPiece(self: *Board, piece: *Piece, pos: IVector2) void {
@@ -161,6 +164,97 @@ pub const Board = struct {
         return (pos.x >= 0 and pos.x < 8 and pos.y >= 0 and pos.y < 8);
     }
 
+    fn isPositionBeingAttacked(self: *Board, pos: IVector2, colorAttacking: PieceColor) bool {
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.color != colorAttacking) {
+                continue;
+            }
+
+            const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+            for (moves.items) |move| {
+                if (IVector2Eq(move.to, pos)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    fn isKingInCheck(self: *Board, kingColor: PieceColor) bool {
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.color != kingColor or piece.pieceType != PieceType.King) {
+                continue;
+            }
+
+            const attackingColor = self.getOpositeColor(kingColor);
+            return self.isPositionBeingAttacked(piece.boardPos, attackingColor);
+        }
+
+        return false;
+    }
+
+    fn isMoveValid(self: *Board, move: Move) bool {
+        if (self.pieces.getPtr(move.from)) |piece| {
+            var copy = self.getUndrawableCopy() catch std.debug.panic("Error getting a copy of the board\n", .{});
+            copy.movePiece(piece, move);
+            const isNotInCheck = !copy.isKingInCheck(piece.color);
+            copy.deinit();
+            return isNotInCheck;
+        }
+
+        return false;
+    }
+
+    fn getUndrawableCopy(self: *Board) !Board {
+        var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            const newPiece = Piece.initUndrawable(piece.boardPos, piece.color, piece.pieceType);
+            _ = try pieces.put(piece.boardPos, newPiece);
+        }
+
+        var unusedRooks = set.Set(*Piece).init(std.heap.page_allocator);
+        var itRooks = self.unusedRooks.iterator();
+        while (itRooks.next()) |entry| {
+            if (pieces.getPtr(entry.*.boardPos)) |piece| {
+                _ = try unusedRooks.add(piece);
+            }
+        }
+
+        var unusedKings = set.Set(*Piece).init(std.heap.page_allocator);
+        var itKings = self.unusedKings.iterator();
+        while (itKings.next()) |entry| {
+            if (pieces.getPtr(entry.*.boardPos)) |piece| {
+                _ = try unusedKings.add(piece);
+            }
+        }
+
+        var possibleEnPassantPawn: ?*Piece = null;
+        if (self.possibleEnPassantPawn) |piece| {
+            possibleEnPassantPawn = pieces.getPtr(piece.boardPos);
+        }
+
+        const copyUndrawable: Board = .{
+            .pieces = pieces,
+            .tileSize = self.tileSize,
+            .offsetX = self.offsetX,
+            .offsetY = self.offsetY,
+            .isWhiteTurn = self.isWhiteTurn,
+            .selectedPiece = null,
+            .possibleEnPassantPawn = possibleEnPassantPawn,
+            .unusedRooks = unusedRooks,
+            .unusedKings = unusedKings,
+        };
+
+        return copyUndrawable;
+    }
+
     fn getMouseBoardPosition(self: *Board) IVector2 {
         if (!self.isMouseOverBoard()) {
             return IVector2.init(0, 0);
@@ -180,12 +274,20 @@ pub const Board = struct {
         };
     }
 
+    fn getOpositeColor(_: *Board, color: PieceColor) PieceColor {
+        return switch (color) {
+            PieceColor.White => PieceColor.Black,
+            PieceColor.Black => PieceColor.White,
+        };
+    }
+
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
         if (move.getType() == MoveType.Promotion) {
             piece.pieceType = move.properties.Promotion.promotedTo;
         }
 
-        const newPiece = Piece.init(move.to, piece.color, piece.pieceType);
+        var newPiece = piece.getCopy();
+        newPiece.boardPos = move.to;
 
         if (move.getType() == MoveType.EnPassant) {
             _ = self.pieces.remove(move.properties.EnPassant.capturedPiece.boardPos);
@@ -222,7 +324,9 @@ pub const Board = struct {
         _ = self.pieces.remove(move.from);
 
         if (move.getType() == MoveType.Castle) {
-            const newRook = Piece.init(move.properties.Castle.rookTo, move.properties.Castle.rook.color, move.properties.Castle.rook.pieceType);
+            var newRook = move.properties.Castle.rook.getCopy();
+            newRook.boardPos = move.properties.Castle.rookTo;
+
             _ = self.pieces.remove(move.properties.Castle.rookFrom);
             self.pieces.put(move.properties.Castle.rookTo, newRook) catch {
                 std.debug.panic("Error moving rook to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
@@ -263,7 +367,7 @@ pub const Board = struct {
 
             // Verify if the piece was moved to a possible square
             if (self.selectedPiece) |piece| {
-                const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+                const moves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
                 for (moves.items) |move| {
                     if (IVector2Eq(move.to, mousePos)) {
                         self.movePiece(piece, move);
@@ -593,6 +697,23 @@ pub const Board = struct {
         return moves;
     }
 
+    fn getValidMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
+        const moves = try self.getPossibleMoves(piece);
+
+        var validMoves = std.ArrayList(Move).init(std.heap.page_allocator);
+        for (moves.items) |move| {
+            if (self.isMoveValid(move)) {
+                _ = validMoves.append(move) catch {
+                    std.debug.panic("Error appending move to movesThatWillPreventCheck\n", .{});
+                };
+            }
+        }
+
+        moves.deinit();
+
+        return validMoves;
+    }
+
     fn drawBoard(self: *Board) void {
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
@@ -639,12 +760,26 @@ pub const Board = struct {
             const pos = entry.key_ptr;
             const piece = entry.value_ptr;
             self.drawPiece(piece, pos.*);
+
+            // if (piece.pieceType == PieceType.King) {
+            //     if (self.isKingInCheck(piece.color)) {
+            //         const size = @as(f32, @floatFromInt(self.tileSize));
+            //         const rect = rl.Rectangle{
+            //             .x = @as(f32, @floatFromInt(self.offsetX + piece.boardPos.x * self.tileSize)) + 6.0,
+            //             .y = @as(f32, @floatFromInt(self.offsetY + piece.boardPos.y * self.tileSize)) + 6.0,
+            //             .width = size - 12.0,
+            //             .height = size - 12.0,
+            //         };
+            //
+            //         rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, rl.Color.red);
+            //     }
+            // }
         }
     }
 
     fn drawPossibleMoves(self: *Board) void {
         if (self.selectedPiece) |piece| {
-            const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+            const moves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
 
             const radius = @divTrunc(self.tileSize, 8);
             const padding = @divTrunc(self.tileSize - radius * 2, 2);

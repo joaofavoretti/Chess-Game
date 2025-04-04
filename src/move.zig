@@ -14,11 +14,7 @@ pub const MoveType = enum {
 };
 
 pub const MoveProperties = union(MoveType) {
-    Normal: struct {
-        isCheck: bool = false,
-        isCheckmate: bool = false,
-        isStalemate: bool = false,
-    },
+    Normal: struct {},
     DoublePawn: struct {},
     Capture: struct {
         capturedPiece: *Piece = undefined,
