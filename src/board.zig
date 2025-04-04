@@ -32,7 +32,7 @@ pub const Board = struct {
     possibleEnPassantPawn: ?*Piece = null,
     unusedRooks: set.Set(*Piece),
     unusedKings: set.Set(*Piece),
-    gameOver: bool = false,
+    isGameOver: bool = false,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -382,8 +382,31 @@ pub const Board = struct {
         }
     }
 
+    fn areThereValidMoves(self: *Board) bool {
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.color != self.getColorToMove()) {
+                continue;
+            }
+
+            const moves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+            if (moves.items.len > 0) {
+                return true;
+            }
+            moves.deinit();
+        }
+
+        return false;
+    }
+
     pub fn update(self: *Board, deltaTime: f32) void {
+        if (self.isGameOver) {
+            return;
+        }
+
         verifyClickedPiece(self, deltaTime);
+        self.isGameOver = self.isKingInCheck(self.getColorToMove()) and !self.areThereValidMoves();
     }
 
     fn getPawnPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
@@ -812,5 +835,18 @@ pub const Board = struct {
         self.drawSelectedPieceTile();
         self.drawPieces();
         self.drawPossibleMoves();
+
+        if (self.isGameOver) {
+            const text = switch (self.getColorToMove()) {
+                PieceColor.White => "White wins!",
+                PieceColor.Black => "Black wins!",
+            };
+
+            const textSize = rl.measureText(text, 20);
+            const x = @divTrunc((rl.getScreenWidth() - textSize), 2);
+            const y = @divTrunc(rl.getScreenHeight(), 2);
+
+            rl.drawText(text, x, y, 20, rl.Color.red);
+        }
     }
 };
