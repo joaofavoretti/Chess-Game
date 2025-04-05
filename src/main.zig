@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const Board = @import("board.zig").Board;
 const p = @import("piece.zig");
+const SoundType = @import("sound.zig").SoundType;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
@@ -24,6 +25,7 @@ var state: GameState = undefined;
 
 fn setup() void {
     state = GameState.init();
+    state.board.playSound(SoundType.GameStart);
 }
 
 fn destroy() void {
@@ -35,7 +37,7 @@ fn update(deltaTime: f32) void {
 }
 
 fn draw() void {
-    rl.clearBackground(rl.Color.ray_white);
+    rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.board.draw();
 }
 
@@ -50,6 +52,8 @@ pub fn main() !void {
     });
     rl.initWindow(screenWidth, screenHeight, "Chess");
     defer rl.closeWindow();
+    rl.initAudioDevice();
+    defer rl.closeAudioDevice();
 
     rl.setTargetFPS(60);
 

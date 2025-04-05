@@ -11,6 +11,8 @@ const IVector2Eq = @import("utils/ivector.zig").IVector2Eq;
 const IVector2Add = @import("utils/ivector.zig").IVector2Add;
 const Move = @import("move.zig").Move;
 const MoveType = @import("move.zig").MoveType;
+const SoundSystem = @import("sound.zig").SoundSystem;
+const SoundType = @import("sound.zig").SoundType;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
@@ -28,6 +30,8 @@ pub const Board = struct {
     ACTIVE_WHITE_TILE_COLOR: rl.Color = rl.Color.init(245, 246, 130, 255),
     ACTIVE_BLACK_TILE_COLOR: rl.Color = rl.Color.init(185, 202, 67, 255),
     POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 30),
+
+    soundSystem: ?SoundSystem = null,
 
     pieces: std.AutoHashMap(IVector2, Piece),
     tileSize: i32,
@@ -124,6 +128,10 @@ pub const Board = struct {
             std.debug.panic("Error initializing the Set\n", .{});
         };
 
+        const soundSystem = SoundSystem.init() catch {
+            std.debug.panic("Error initializing the sound system\n", .{});
+        };
+
         return Board{
             .pieces = pieces,
             .unusedRooks = unusedRooks,
@@ -131,6 +139,7 @@ pub const Board = struct {
             .tileSize = tileSize,
             .offsetX = offsetX,
             .offsetY = offsetY,
+            .soundSystem = soundSystem,
         };
     }
 
@@ -138,6 +147,16 @@ pub const Board = struct {
         self.pieces.deinit();
         self.unusedRooks.deinit();
         self.unusedKings.deinit();
+
+        if (self.soundSystem) |*soundSystem| {
+            soundSystem.deinit();
+        }
+    }
+
+    pub fn playSound(self: *Board, soundType: SoundType) void {
+        if (self.soundSystem) |*soundSystem| {
+            soundSystem.playSound(soundType);
+        }
     }
 
     fn drawPiece(self: *Board, piece: *Piece, pos: IVector2) void {
@@ -216,7 +235,9 @@ pub const Board = struct {
     fn isMoveValid(self: *Board, move: Move) bool {
         if (self.pieces.getPtr(move.from)) |piece| {
             var copy = self.getUndrawableCopy() catch std.debug.panic("Error getting a copy of the board\n", .{});
-            copy.movePiece(piece, move);
+            if (copy.pieces.getPtr(move.from)) |copyPiece| {
+                copy.movePiece(copyPiece, move);
+            }
             const isNotInCheck = !copy.isKingInCheck(piece.color);
             copy.deinit();
             return isNotInCheck;
@@ -297,19 +318,27 @@ pub const Board = struct {
     }
 
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
-        if (move.getType() == MoveType.Promotion) {
-            piece.pieceType = move.properties.Promotion.promotedTo;
+        var sound = SoundType.MoveSelf;
+        if (!self.isWhiteTurn) {
+            sound = SoundType.MoveOpponent;
         }
 
         var newPiece = piece.getCopy();
         newPiece.boardPos = move.to;
 
+        if (move.getType() == MoveType.Promotion) {
+            newPiece.setType(move.properties.Promotion.promotedTo);
+            sound = SoundType.Promote;
+        }
+
         if (move.getType() == MoveType.EnPassant) {
             _ = self.pieces.remove(move.properties.EnPassant.capturedPiece.boardPos);
+            sound = SoundType.Capture;
         }
 
         if (move.getType() == MoveType.Capture) {
             _ = self.pieces.remove(move.properties.Capture.capturedPiece.boardPos);
+            sound = SoundType.Capture;
         }
 
         // Add the piece to the new position
@@ -346,7 +375,14 @@ pub const Board = struct {
             self.pieces.put(move.properties.Castle.rookTo, newRook) catch {
                 std.debug.panic("Error moving rook to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
             };
+            sound = SoundType.Castle;
         }
+
+        if (self.isKingInCheck(self.getColorToMove())) {
+            sound = SoundType.Check;
+        }
+
+        self.playSound(sound);
 
         self.lastMove = move;
         self.selectedPiece = null;
@@ -390,6 +426,11 @@ pub const Board = struct {
                             self.movePiece(piece, move);
                             self.isWhiteTurn = !self.isWhiteTurn;
                             self.isGameOver = self.isKingInCheck(self.getColorToMove()) and !self.areThereValidMoves();
+
+                            if (self.isGameOver) {
+                                self.playSound(SoundType.GameEnd);
+                            }
+
                             return;
                         }
                     }

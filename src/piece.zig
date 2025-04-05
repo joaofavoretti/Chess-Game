@@ -28,14 +28,16 @@ fn getTextureFromPiece(pieceColor: PieceColor, pieceType: PieceType) !rl.Texture
 }
 
 fn getTexture(pieceColor: PieceColor, pieceType: PieceType) rl.Texture2D {
-    return getTextureFromPiece(pieceColor, pieceType) catch rl.loadTexture(TEXTURE_DEFAULT_PATH) catch unreachable;
+    const texture = getTextureFromPiece(pieceColor, pieceType) catch rl.loadTexture(TEXTURE_DEFAULT_PATH) catch unreachable;
+    rl.setTextureFilter(texture, rl.TextureFilter.bilinear);
+    return texture;
 }
 
 pub const Piece = struct {
     boardPos: IVector2,
     color: PieceColor,
     pieceType: PieceType,
-    texture: rl.Texture2D = undefined,
+    texture: ?rl.Texture2D = null,
 
     pub fn init(boardPos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
         if (boardPos.x >= 8 or boardPos.y >= 8) {
@@ -48,7 +50,6 @@ pub const Piece = struct {
         }
 
         const texture = getTexture(color, pieceType);
-        rl.setTextureFilter(texture, rl.TextureFilter.trilinear);
 
         return Piece{
             .boardPos = boardPos,
@@ -56,6 +57,13 @@ pub const Piece = struct {
             .pieceType = pieceType,
             .texture = texture,
         };
+    }
+
+    pub fn deinit(self: *Piece) void {
+        if (self.texture) |texture| {
+            rl.unloadTexture(texture);
+            self.texture = null;
+        }
     }
 
     pub fn initUndrawable(boardPos: IVector2, color: PieceColor, pieceType: PieceType) Piece {
@@ -76,15 +84,29 @@ pub const Piece = struct {
     }
 
     pub fn getSize(self: *Piece) IVector2 {
-        return IVector2.init(self.texture.width, self.texture.height);
+        if (self.texture) |texture| {
+            return IVector2.init(texture.width, texture.height);
+        }
+        return IVector2.init(0, 0);
+    }
+
+    pub fn setType(self: *Piece, pieceType: PieceType) void {
+        self.pieceType = pieceType;
+
+        if (self.texture) |texture| {
+            rl.unloadTexture(texture);
+            self.texture = getTexture(self.color, pieceType);
+        }
     }
 
     pub fn draw(self: *Piece, dest: rl.Rectangle) void {
-        const tWidth = @as(f32, @floatFromInt(self.texture.width));
-        const tHeight = @as(f32, @floatFromInt(self.texture.height));
-        const source = rl.Rectangle.init(0, 0, tWidth, tHeight);
-        const origin = rl.Vector2.init(0, 0);
+        if (self.texture) |texture| {
+            const tWidth = @as(f32, @floatFromInt(texture.width));
+            const tHeight = @as(f32, @floatFromInt(texture.height));
+            const source = rl.Rectangle.init(0, 0, tWidth, tHeight);
+            const origin = rl.Vector2.init(0, 0);
 
-        rl.drawTexturePro(self.texture, source, dest, origin, 0.0, rl.Color.white);
+            rl.drawTexturePro(texture, source, dest, origin, 0.0, rl.Color.white);
+        }
     }
 };
