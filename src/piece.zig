@@ -3,8 +3,8 @@ const path = std.fs.path;
 const rl = @import("raylib");
 const IVector2 = @import("utils/ivector.zig").IVector2;
 
-const TEXTURE_ASSET_PATH = "./assets";
-const TEXTURE_DEFAULT_PATH = "./assets/Default.png";
+const TEXTURE_ASSET_PATH = "./assets/pieces/default";
+const TEXTURE_DEFAULT_PATH = TEXTURE_ASSET_PATH ++ "/Default.png";
 
 pub const PieceColor = enum {
     White,
@@ -47,11 +47,14 @@ pub const Piece = struct {
             };
         }
 
+        const texture = getTexture(color, pieceType);
+        rl.setTextureFilter(texture, rl.TextureFilter.trilinear);
+
         return Piece{
             .boardPos = boardPos,
             .color = color,
             .pieceType = pieceType,
-            .texture = getTexture(color, pieceType),
+            .texture = texture,
         };
     }
 

@@ -136,19 +136,20 @@ pub const Board = struct {
             return;
         }
 
-        const pieceSize = piece.getSize();
+        // const pieceSize = piece.getSize();
 
-        if (pieceSize.x > self.tileSize or pieceSize.y > self.tileSize) {
-            return;
-        }
+        // if (pieceSize.x > self.tileSize or pieceSize.y > self.tileSize) {
+        //     std.debug.print("Piece size is bigger than tile size\n", .{});
+        //     return;
+        // }
 
-        const padding = @divTrunc(self.tileSize - pieceSize.x, 2);
+        // const padding = @divTrunc(self.tileSize - pieceSize.x, 2);
 
         const dest = rl.Rectangle.init(
-            @as(f32, @floatFromInt((self.offsetX + pos.x * self.tileSize) + padding)),
-            @as(f32, @floatFromInt((self.offsetY + pos.y * self.tileSize) + padding)),
-            @as(f32, @floatFromInt(pieceSize.x)),
-            @as(f32, @floatFromInt(pieceSize.y)),
+            @as(f32, @floatFromInt(self.offsetX + pos.x * self.tileSize)),
+            @as(f32, @floatFromInt(self.offsetY + pos.y * self.tileSize)),
+            @as(f32, @floatFromInt(self.tileSize)),
+            @as(f32, @floatFromInt(self.tileSize)),
         );
         piece.draw(dest);
     }

@@ -40,12 +40,14 @@ fn draw() void {
 }
 
 pub fn main() !void {
-    const screenWidth = 1024;
-    const screenHeight = 768;
+    // const screenWidth = 1024;
+    // const screenHeight = 768;
+    const screenWidth = 960;
+    const screenHeight = 720;
 
-    rl.setConfigFlags(rl.ConfigFlags{
-        .msaa_4x_hint = true,
-    });
+    // rl.setConfigFlags(rl.ConfigFlags{
+    //     .msaa_4x_hint = true,
+    // });
     rl.initWindow(screenWidth, screenHeight, "Chess");
     defer rl.closeWindow();
 
