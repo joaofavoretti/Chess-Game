@@ -16,10 +16,18 @@ const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 
 pub const Board = struct {
-    WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
-    BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
-    ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
-    POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 50),
+    // Futuristic color pallete
+    // WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
+    // BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
+    // ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
+    // POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 50),
+
+    // Default color pallete
+    WHITE_TILE_COLOR: rl.Color = rl.Color.init(235, 236, 208, 255),
+    BLACK_TILE_COLOR: rl.Color = rl.Color.init(115, 149, 82, 255),
+    ACTIVE_WHITE_TILE_COLOR: rl.Color = rl.Color.init(245, 246, 130, 255),
+    ACTIVE_BLACK_TILE_COLOR: rl.Color = rl.Color.init(185, 202, 67, 255),
+    POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 30),
 
     pieces: std.AutoHashMap(IVector2, Piece),
     tileSize: i32,
@@ -34,6 +42,7 @@ pub const Board = struct {
     isGameOver: bool = false,
     selectedPiece: ?*Piece = null,
     cachedValidMoves: ?std.ArrayList(Move) = null,
+    lastMove: ?Move = null,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -152,6 +161,10 @@ pub const Board = struct {
             @as(f32, @floatFromInt(self.tileSize)),
         );
         piece.draw(dest);
+    }
+
+    fn isWhiteTile(_: *Board, pos: IVector2) bool {
+        return (@mod((pos.x + pos.y), 2) == 0);
     }
 
     fn isMouseOverBoard(self: *Board) bool {
@@ -335,6 +348,7 @@ pub const Board = struct {
             };
         }
 
+        self.lastMove = move;
         self.selectedPiece = null;
     }
 
@@ -743,6 +757,33 @@ pub const Board = struct {
         return validMoves;
     }
 
+    fn drawTile(self: *Board, pos: IVector2, active: bool) void {
+        const x = self.offsetX + pos.x * self.tileSize;
+        const y = self.offsetY + pos.y * self.tileSize;
+
+        var color = self.BLACK_TILE_COLOR;
+
+        if (self.isWhiteTile(pos)) {
+            color = self.WHITE_TILE_COLOR;
+        }
+
+        if (active) {
+            if (self.isWhiteTile(pos)) {
+                color = self.ACTIVE_WHITE_TILE_COLOR;
+            } else {
+                color = self.ACTIVE_BLACK_TILE_COLOR;
+            }
+        }
+
+        rl.drawRectangle(
+            x,
+            y,
+            self.tileSize,
+            self.tileSize,
+            color,
+        );
+    }
+
     fn drawBoard(self: *Board) void {
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
@@ -753,7 +794,7 @@ pub const Board = struct {
 
                 var color = self.BLACK_TILE_COLOR;
 
-                if ((i + j) % 2 == 0) {
+                if (self.isWhiteTile(IVector2.init(i_, j_))) {
                     color = self.WHITE_TILE_COLOR;
                 }
 
@@ -766,6 +807,11 @@ pub const Board = struct {
                 );
             }
         }
+
+        if (self.lastMove) |move| {
+            self.drawTile(move.from, true);
+            self.drawTile(move.to, true);
+        }
     }
 
     fn drawSelectedPieceTile(self: *Board) void {
@@ -773,12 +819,18 @@ pub const Board = struct {
             const x = self.offsetX + piece.boardPos.x * self.tileSize;
             const y = self.offsetY + piece.boardPos.y * self.tileSize;
 
+            var color = self.ACTIVE_BLACK_TILE_COLOR;
+
+            if (self.isWhiteTile(piece.boardPos)) {
+                color = self.ACTIVE_WHITE_TILE_COLOR;
+            }
+
             rl.drawRectangle(
                 x,
                 y,
                 self.tileSize,
                 self.tileSize,
-                self.ACTIVE_TILE_COLOR,
+                color,
             );
         }
     }
@@ -810,7 +862,7 @@ pub const Board = struct {
     fn drawPossibleMoves(self: *Board) void {
         if (self.selectedPiece != null) {
             if (self.cachedValidMoves) |moves| {
-                const radius = @divTrunc(self.tileSize, 8);
+                const radius = @divTrunc(self.tileSize, 6);
                 const padding = @divTrunc(self.tileSize - radius * 2, 2);
 
                 for (moves.items) |move| {

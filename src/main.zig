@@ -45,9 +45,9 @@ pub fn main() !void {
     const screenWidth = 960;
     const screenHeight = 720;
 
-    // rl.setConfigFlags(rl.ConfigFlags{
-    //     .msaa_4x_hint = true,
-    // });
+    rl.setConfigFlags(rl.ConfigFlags{
+        .msaa_4x_hint = true,
+    });
     rl.initWindow(screenWidth, screenHeight, "Chess");
     defer rl.closeWindow();
 
