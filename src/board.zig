@@ -374,6 +374,7 @@ pub const Board = struct {
                         if (IVector2Eq(move.to, mousePos)) {
                             self.movePiece(piece, move);
                             self.isWhiteTurn = !self.isWhiteTurn;
+                            self.isGameOver = self.isKingInCheck(self.getColorToMove()) and !self.areThereValidMoves();
                             return;
                         }
                     }
@@ -400,6 +401,8 @@ pub const Board = struct {
             moves.deinit();
         }
 
+        std.debug.print("Done checking possible moves\n", .{});
+
         return false;
     }
 
@@ -409,7 +412,6 @@ pub const Board = struct {
         }
 
         verifyClickedPiece(self, deltaTime);
-        self.isGameOver = self.isKingInCheck(self.getColorToMove()) and !self.areThereValidMoves();
     }
 
     fn getPawnPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
