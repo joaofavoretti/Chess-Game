@@ -28,11 +28,12 @@ pub const Board = struct {
 
     // Game Play logic
     isWhiteTurn: bool = true,
-    selectedPiece: ?*Piece = null,
     possibleEnPassantPawn: ?*Piece = null,
     unusedRooks: set.Set(*Piece),
     unusedKings: set.Set(*Piece),
     isGameOver: bool = false,
+    selectedPiece: ?*Piece = null,
+    cachedValidMoves: ?std.ArrayList(Move) = null,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
@@ -361,18 +362,20 @@ pub const Board = struct {
 
                 if (IVector2Eq(piece.boardPos, mousePos)) {
                     self.selectedPiece = piece;
+                    self.cachedValidMoves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
                     return;
                 }
             }
 
             // Verify if the piece was moved to a possible square
             if (self.selectedPiece) |piece| {
-                const moves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
-                for (moves.items) |move| {
-                    if (IVector2Eq(move.to, mousePos)) {
-                        self.movePiece(piece, move);
-                        self.isWhiteTurn = !self.isWhiteTurn;
-                        return;
+                if (self.cachedValidMoves) |moves| {
+                    for (moves.items) |move| {
+                        if (IVector2Eq(move.to, mousePos)) {
+                            self.movePiece(piece, move);
+                            self.isWhiteTurn = !self.isWhiteTurn;
+                            return;
+                        }
                     }
                 }
             }
@@ -784,6 +787,7 @@ pub const Board = struct {
             const piece = entry.value_ptr;
             self.drawPiece(piece, pos.*);
 
+            // Draw a little circle around the king to show it is in check
             // if (piece.pieceType == PieceType.King) {
             //     if (self.isKingInCheck(piece.color)) {
             //         const size = @as(f32, @floatFromInt(self.tileSize));
@@ -801,30 +805,30 @@ pub const Board = struct {
     }
 
     fn drawPossibleMoves(self: *Board) void {
-        if (self.selectedPiece) |piece| {
-            const moves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+        if (self.selectedPiece != null) {
+            if (self.cachedValidMoves) |moves| {
+                const radius = @divTrunc(self.tileSize, 8);
+                const padding = @divTrunc(self.tileSize - radius * 2, 2);
 
-            const radius = @divTrunc(self.tileSize, 8);
-            const padding = @divTrunc(self.tileSize - radius * 2, 2);
+                for (moves.items) |move| {
+                    const center = rl.Vector2.init(
+                        @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize + padding + radius)),
+                        @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize + padding + radius)),
+                    );
 
-            for (moves.items) |move| {
-                const center = rl.Vector2.init(
-                    @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize + padding + radius)),
-                    @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize + padding + radius)),
-                );
+                    if (move.getType() == MoveType.Capture) {
+                        const size = @as(f32, @floatFromInt(self.tileSize));
+                        const rect = rl.Rectangle{
+                            .x = @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize)) + 6.0,
+                            .y = @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize)) + 6.0,
+                            .width = size - 12.0,
+                            .height = size - 12.0,
+                        };
 
-                if (move.getType() == MoveType.Capture) {
-                    const size = @as(f32, @floatFromInt(self.tileSize));
-                    const rect = rl.Rectangle{
-                        .x = @as(f32, @floatFromInt(self.offsetX + move.to.x * self.tileSize)) + 6.0,
-                        .y = @as(f32, @floatFromInt(self.offsetY + move.to.y * self.tileSize)) + 6.0,
-                        .width = size - 12.0,
-                        .height = size - 12.0,
-                    };
-
-                    rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
-                } else {
-                    rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+                        rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+                    } else {
+                        rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+                    }
                 }
             }
         }
@@ -838,8 +842,8 @@ pub const Board = struct {
 
         if (self.isGameOver) {
             const text = switch (self.getColorToMove()) {
-                PieceColor.White => "White wins!",
-                PieceColor.Black => "Black wins!",
+                PieceColor.White => "Black wins!",
+                PieceColor.Black => "White wins!",
             };
 
             const textSize = rl.measureText(text, 20);
