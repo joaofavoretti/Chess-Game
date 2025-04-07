@@ -338,6 +338,10 @@ pub const Board = struct {
         }
 
         if (move.getType() == MoveType.Capture) {
+            if (move.properties.Capture.capturedPiece.pieceType == PieceType.Rook and self.unusedRooks.contains(move.properties.Capture.capturedPiece)) {
+                _ = self.unusedRooks.remove(move.properties.Capture.capturedPiece);
+            }
+
             _ = self.pieces.remove(move.properties.Capture.capturedPiece.boardPos);
             sound = SoundType.Capture;
         }
@@ -735,6 +739,8 @@ pub const Board = struct {
             const leftRook = self.pieces.getPtr(IVector2.init(0, piece.boardPos.y));
             if (leftRook) |rook| {
                 if (self.unusedRooks.contains(rook) and
+                    !self.isKingInCheck(piece.color) and
+                    !self.isPositionBeingAttacked(IVector2.init(3, piece.boardPos.y), self.getOpositeColor(piece.color)) and
                     self.pieces.get(IVector2.init(1, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(2, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(3, piece.boardPos.y)) == null)
@@ -753,6 +759,7 @@ pub const Board = struct {
             const rightRook = self.pieces.getPtr(IVector2.init(7, piece.boardPos.y));
             if (rightRook) |rook| {
                 if (self.unusedRooks.contains(rook) and
+                    !self.isKingInCheck(piece.color) and
                     self.pieces.get(IVector2.init(5, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(6, piece.boardPos.y)) == null)
                 {
