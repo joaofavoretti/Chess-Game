@@ -44,6 +44,7 @@ pub const Board = struct {
     unusedRooks: set.Set(*Piece),
     unusedKings: set.Set(*Piece),
     isGameOver: bool = false,
+    isGameDraw: bool = false,
     selectedPiece: ?*Piece = null,
     cachedValidMoves: ?std.ArrayList(Move) = null,
     lastMove: ?Move = null,
@@ -425,7 +426,9 @@ pub const Board = struct {
                         if (IVector2Eq(move.to, mousePos)) {
                             self.movePiece(piece, move);
                             self.isWhiteTurn = !self.isWhiteTurn;
-                            self.isGameOver = self.isKingInCheck(self.getColorToMove()) and !self.areThereValidMoves();
+
+                            self.isGameOver = !self.areThereValidMoves();
+                            self.isGameDraw = self.isGameOver and !self.isKingInCheck(self.getColorToMove());
 
                             if (self.isGameOver) {
                                 self.playSound(SoundType.GameEnd);
@@ -946,7 +949,11 @@ pub const Board = struct {
             const x = @divTrunc((rl.getScreenWidth() - textSize), 2);
             const y = @divTrunc(rl.getScreenHeight(), 2);
 
-            rl.drawText(text, x, y, 20, rl.Color.red);
+            if (self.isGameDraw) {
+                rl.drawText("Game Draw!", x, y, 20, rl.Color.red);
+            } else {
+                rl.drawText(text, x, y, 20, rl.Color.red);
+            }
         }
     }
 };
