@@ -11,8 +11,10 @@ const GameState = struct {
     board: Board = undefined,
 
     pub fn init() GameState {
+        var board = Board.init();
+        board.moveCount = 10;
         return GameState{
-            .board = Board.init(),
+            .board = board,
         };
     }
 

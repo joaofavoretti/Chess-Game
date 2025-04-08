@@ -21,7 +21,8 @@ pub const Board = struct {
     // Futuristic color pallete
     // WHITE_TILE_COLOR: rl.Color = rl.Color.init(232, 237, 249, 255),
     // BLACK_TILE_COLOR: rl.Color = rl.Color.init(183, 192, 216, 255),
-    // ACTIVE_TILE_COLOR: rl.Color = rl.Color.init(123, 97, 255, 150),
+    // ACTIVE_WHITE_TILE_COLOR: rl.Color = rl.Color.init(177, 167, 252, 255),
+    // ACTIVE_BLACK_TILE_COLOR: rl.Color = rl.Color.init(153, 144, 235, 255),
     // POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 50),
 
     // Default color pallete
@@ -49,31 +50,33 @@ pub const Board = struct {
     cachedValidMoves: ?std.ArrayList(Move) = null,
     lastMove: ?Move = null,
 
+    moveCount: i32 = 0,
+
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
 
-        for (0..8) |i| {
-            const i_ = @as(i32, @intCast(i));
-            try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
-            try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
-        }
+        // for (0..8) |i| {
+        //     const i_ = @as(i32, @intCast(i));
+        //     try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
+        //     try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
+        // }
 
         try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
         try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
-        try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
-        try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
-
-        try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
-        try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
-        try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
-        try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
-
-        try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
-        try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
-        try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
-        try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
-
-        try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
+        // try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
+        // try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
+        //
+        // try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
+        // try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
+        // try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
+        // try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
+        //
+        // try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
+        // try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
+        // try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
+        // try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
+        //
+        // try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
         try pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen));
 
         try pieces.put(IVector2.init(4, 7), Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King));
@@ -200,6 +203,17 @@ pub const Board = struct {
     }
 
     fn isPositionBeingAttacked(self: *Board, pos: IVector2, colorAttacking: PieceColor) bool {
+        if (self.pieces.getPtr(pos)) |piece| {
+            std.debug.print("{} [isPositionBeingAttacked] Checking if position {} ({s} {s}) is being attacked by {s}\n", .{
+                self.moveCount,
+                pos,
+                @tagName(piece.color),
+                @tagName(piece.pieceType),
+                @tagName(colorAttacking),
+            });
+        } else {
+            std.debug.print("{} [isPositionBeingAttacked] Checking if position {} (Empty) is being attacked by {s}\n", .{ self.moveCount, pos, @tagName(colorAttacking) });
+        }
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
             const piece = entry.value_ptr;
@@ -219,6 +233,7 @@ pub const Board = struct {
     }
 
     fn isKingInCheck(self: *Board, kingColor: PieceColor) bool {
+        std.debug.print("{} [isKingInCheck] Checking if king {s} is in check\n", .{ self.moveCount, @tagName(kingColor) });
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
             const piece = entry.value_ptr;
@@ -234,11 +249,41 @@ pub const Board = struct {
     }
 
     fn isMoveValid(self: *Board, move: Move) bool {
+        std.debug.print("{} [isMoveValid] Verifying if move {s} from {} to {} is valid\n", .{
+            self.moveCount,
+            @tagName(move.getType()),
+            move.from,
+            move.to,
+        });
+
+        // Verify if all the king journey to the new position is valid
+        if (move.getType() == MoveType.Castle) {
+            if (self.isKingInCheck(self.getColorToMove())) {
+                std.debug.print("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
+                return false;
+            }
+
+            if (self.pieces.getPtr(move.from)) |king| {
+                const kingColor = king.color;
+                const attackingColor = self.getOpositeColor(kingColor);
+                var x: i32 = king.boardPos.x;
+                while (x != move.to.x) {
+                    x += if (move.to.x > king.boardPos.x) 1 else -1;
+                    const pos = IVector2.init(x, king.boardPos.y);
+                    if (self.isPositionBeingAttacked(pos, attackingColor)) {
+                        std.debug.print("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
+                        return false;
+                    }
+                }
+            }
+        }
+
         if (self.pieces.getPtr(move.from)) |piece| {
             var copy = self.getUndrawableCopy() catch std.debug.panic("Error getting a copy of the board\n", .{});
             if (copy.pieces.getPtr(move.from)) |copyPiece| {
                 copy.movePiece(copyPiece, move);
             }
+
             const isNotInCheck = !copy.isKingInCheck(piece.color);
             copy.deinit();
             return isNotInCheck;
@@ -319,6 +364,15 @@ pub const Board = struct {
     }
 
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
+        self.moveCount += 1;
+        std.debug.print("{} [movePiece] Moving {s} {s} from {} to {}\n", .{
+            self.moveCount,
+            @tagName(piece.color),
+            @tagName(piece.pieceType),
+            move.from,
+            move.to,
+        });
+
         var sound = SoundType.MoveSelf;
         if (!self.isWhiteTurn) {
             sound = SoundType.MoveOpponent;
@@ -739,8 +793,6 @@ pub const Board = struct {
             const leftRook = self.pieces.getPtr(IVector2.init(0, piece.boardPos.y));
             if (leftRook) |rook| {
                 if (self.unusedRooks.contains(rook) and
-                    !self.isKingInCheck(piece.color) and
-                    !self.isPositionBeingAttacked(IVector2.init(3, piece.boardPos.y), self.getOpositeColor(piece.color)) and
                     self.pieces.get(IVector2.init(1, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(2, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(3, piece.boardPos.y)) == null)
@@ -759,7 +811,6 @@ pub const Board = struct {
             const rightRook = self.pieces.getPtr(IVector2.init(7, piece.boardPos.y));
             if (rightRook) |rook| {
                 if (self.unusedRooks.contains(rook) and
-                    !self.isKingInCheck(piece.color) and
                     self.pieces.get(IVector2.init(5, piece.boardPos.y)) == null and
                     self.pieces.get(IVector2.init(6, piece.boardPos.y)) == null)
                 {
