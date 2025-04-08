@@ -1,25 +1,43 @@
 const std = @import("std");
 const rl = @import("raylib");
 const Board = @import("board.zig").Board;
+const Engine = @import("engine.zig").Engine;
 const p = @import("piece.zig");
 const SoundType = @import("sound.zig").SoundType;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 
+const TIME_PER_MOVE = 1.0;
+
 const GameState = struct {
-    board: Board = undefined,
+    board: *Board,
+    engine: *Engine,
+    timeForMove: f32 = 0.0,
 
     pub fn init() GameState {
-        var board = Board.init();
+        var board = std.heap.page_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
+        board.* = Board.init();
+
+        const engine = std.heap.page_allocator.create(Engine) catch std.debug.panic("Failed to allocate Engine", .{});
+        engine.* = Engine.init(board);
+
         board.moveCount = 10;
+
+        std.debug.print("[GameState] Board value of moveCount {}\n", .{board.moveCount});
+        std.debug.print("[GameState] Engine value of moveCount {}\n", .{engine.board.moveCount});
+
         return GameState{
             .board = board,
+            .engine = engine,
         };
     }
 
     pub fn deinit(self: *GameState) void {
         self.board.deinit();
+        std.heap.page_allocator.destroy(self.board);
+
+        std.heap.page_allocator.destroy(self.engine);
     }
 };
 
@@ -36,6 +54,12 @@ fn destroy() void {
 
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
+
+    state.timeForMove += deltaTime;
+    if (state.timeForMove >= TIME_PER_MOVE) {
+        state.engine.makeMove();
+        state.timeForMove = 0.0;
+    }
 }
 
 fn draw() void {
