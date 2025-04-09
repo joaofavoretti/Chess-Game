@@ -487,7 +487,12 @@ pub const Board = struct {
 
                 if (IVector2Eq(piece.boardPos, mousePos)) {
                     self.selectedPiece = piece;
-                    self.cachedValidMoves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+
+                    if (self.cachedValidMoves) |cachedValidMoves| {
+                        cachedValidMoves.deinit();
+                        self.cachedValidMoves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+                    }
+
                     return;
                 }
             }
