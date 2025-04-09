@@ -55,11 +55,7 @@ fn destroy() void {
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
 
-    state.timeForMove += deltaTime;
-    if (state.timeForMove >= TIME_PER_MOVE) {
-        state.engine.makeMove();
-        state.timeForMove = 0.0;
-    }
+    state.engine.makeMove();
 }
 
 fn draw() void {

@@ -11,6 +11,7 @@ pub const MoveType = enum {
     EnPassant,
     Castle,
     Promotion,
+    CapturePromotion,
 };
 
 pub const MoveProperties = union(MoveType) {
@@ -28,6 +29,10 @@ pub const MoveProperties = union(MoveType) {
         rookTo: IVector2 = IVector2.init(0, 0),
     },
     Promotion: struct {
+        promotedTo: PieceType = PieceType.Queen,
+    },
+    CapturePromotion: struct {
+        capturedPiece: *Piece = undefined,
         promotedTo: PieceType = PieceType.Queen,
     },
 };

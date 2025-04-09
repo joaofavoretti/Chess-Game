@@ -415,6 +415,17 @@ pub const Board = struct {
             sound = SoundType.Capture;
         }
 
+        if (move.getType() == MoveType.CapturePromotion) {
+            newPiece.setType(move.properties.CapturePromotion.promotedTo);
+
+            if (move.properties.CapturePromotion.capturedPiece.pieceType == PieceType.Rook and self.unusedRooks.contains(move.properties.CapturePromotion.capturedPiece)) {
+                _ = self.unusedRooks.remove(move.properties.CapturePromotion.capturedPiece);
+            }
+            _ = self.pieces.remove(move.properties.CapturePromotion.capturedPiece.boardPos);
+
+            sound = SoundType.Promote;
+        }
+
         // Add the piece to the new position
         self.pieces.put(move.to, newPiece) catch {
             std.debug.panic("Error moving piece to correct square. Adding piece to AutoHashMap resulted in an error\n", .{});
@@ -490,8 +501,9 @@ pub const Board = struct {
 
                     if (self.cachedValidMoves) |cachedValidMoves| {
                         cachedValidMoves.deinit();
-                        self.cachedValidMoves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
                     }
+
+                    self.cachedValidMoves = self.getValidMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
 
                     return;
                 }
@@ -583,10 +595,20 @@ pub const Board = struct {
         const forwardLeftPosPiece = self.pieces.getPtr(forwardLeftPos);
         if (forwardLeftPosPiece) |attackedPiece| {
             if (attackedPiece.color != piece.color) {
-                const move = Move.init(piece, piece.boardPos, forwardLeftPos, .{
-                    .Capture = .{ .capturedPiece = attackedPiece },
-                });
-                try moves.append(move);
+                if (forwardLeftPos.y == 0 or forwardLeftPos.y == 7) {
+                    const move = Move.init(piece, piece.boardPos, forwardLeftPos, .{
+                        .CapturePromotion = .{
+                            .capturedPiece = attackedPiece,
+                            .promotedTo = PieceType.Queen,
+                        },
+                    });
+                    try moves.append(move);
+                } else {
+                    const move = Move.init(piece, piece.boardPos, forwardLeftPos, .{
+                        .Capture = .{ .capturedPiece = attackedPiece },
+                    });
+                    try moves.append(move);
+                }
             }
         }
 
@@ -594,10 +616,20 @@ pub const Board = struct {
         const forwardRightPosPiece = self.pieces.getPtr(forwardRightPos);
         if (forwardRightPosPiece) |attackedPiece| {
             if (attackedPiece.color != piece.color) {
-                const move = Move.init(piece, piece.boardPos, forwardRightPos, .{
-                    .Capture = .{ .capturedPiece = attackedPiece },
-                });
-                try moves.append(move);
+                if (forwardRightPos.y == 0 or forwardRightPos.y == 7) {
+                    const move = Move.init(piece, piece.boardPos, forwardRightPos, .{
+                        .CapturePromotion = .{
+                            .capturedPiece = attackedPiece,
+                            .promotedTo = PieceType.Queen,
+                        },
+                    });
+                    try moves.append(move);
+                } else {
+                    const move = Move.init(piece, piece.boardPos, forwardRightPos, .{
+                        .Capture = .{ .capturedPiece = attackedPiece },
+                    });
+                    try moves.append(move);
+                }
             }
         }
 
