@@ -55,7 +55,7 @@ fn destroy() void {
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
 
-    state.engine.makeMove();
+    // state.engine.makeMove();
 }
 
 fn draw() void {

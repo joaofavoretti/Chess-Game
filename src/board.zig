@@ -55,28 +55,28 @@ pub const Board = struct {
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
 
-        for (0..8) |i| {
-            const i_ = @as(i32, @intCast(i));
-            try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
-            try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
-        }
-
-        try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
-        try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
-        try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
-        try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
-
-        try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
-        try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
-        try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
-        try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
-
-        try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
-        try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
-        try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
-        try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
-
-        try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
+        // for (0..8) |i| {
+        //     const i_ = @as(i32, @intCast(i));
+        //     try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
+        //     try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
+        // }
+        //
+        // try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
+        // try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
+        // try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
+        // try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
+        //
+        // try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
+        // try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
+        // try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
+        // try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
+        //
+        // try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
+        // try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
+        // try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
+        // try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
+        //
+        // try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
         try pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen));
 
         try pieces.put(IVector2.init(4, 7), Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King));
@@ -363,6 +363,66 @@ pub const Board = struct {
         };
     }
 
+    fn hasInsufficientMaterial(self: *Board) bool {
+        var whiteBishop: ?*Piece = null;
+        var blackBishop: ?*Piece = null;
+
+        var whiteBishopCount: i32 = 0;
+        var whiteKnightCount: i32 = 0;
+        var blackBishopCount: i32 = 0;
+        var blackKnightCount: i32 = 0;
+
+        var it = self.pieces.iterator();
+        while (it.next()) |entry| {
+            const piece = entry.value_ptr;
+            if (piece.pieceType == PieceType.King) {
+                continue;
+            }
+
+            if (piece.color == PieceColor.White) {
+                if (piece.pieceType == PieceType.Bishop) {
+                    whiteBishopCount += 1;
+                    whiteBishop = piece;
+                } else if (piece.pieceType == PieceType.Knight) {
+                    whiteKnightCount += 1;
+                }
+            } else if (piece.color == PieceColor.Black) {
+                if (piece.pieceType == PieceType.Bishop) {
+                    blackBishopCount += 1;
+                    blackBishop = piece;
+                } else if (piece.pieceType == PieceType.Knight) {
+                    blackKnightCount += 1;
+                }
+            }
+
+            if (!(piece.pieceType == PieceType.Knight or piece.pieceType == PieceType.Bishop)) {
+                return false;
+            }
+        }
+
+        if (whiteBishopCount + whiteKnightCount + blackBishopCount + blackKnightCount <= 1) {
+            return true;
+        }
+
+        if (whiteBishopCount + blackBishopCount == 2 and whiteKnightCount + blackKnightCount == 0) {
+            if (whiteBishop) |wBishop| {
+                if (blackBishop) |bBishop| {
+                    return self.isWhiteTile(wBishop.boardPos) == self.isWhiteTile(bBishop.boardPos);
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    fn isDraw(self: *Board) bool {
+        const isStalemate = self.isGameOver and !self.isKingInCheck(self.getColorToMove());
+
+        return isStalemate or self.hasInsufficientMaterial();
+    }
+
     pub fn makeMove(self: *Board, move: Move) void {
         if (self.pieces.getPtr(move.from)) |piece| {
             self.movePiece(piece, move);
@@ -370,7 +430,8 @@ pub const Board = struct {
             self.isWhiteTurn = !self.isWhiteTurn;
 
             self.isGameOver = !self.areThereValidMoves();
-            self.isGameDraw = self.isGameOver and !self.isKingInCheck(self.getColorToMove());
+            self.isGameDraw = self.isDraw();
+            self.isGameOver = self.isGameDraw or self.isGameOver;
 
             if (self.isGameOver) {
                 self.playSound(SoundType.GameEnd);
