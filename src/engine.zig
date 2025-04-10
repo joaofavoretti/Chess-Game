@@ -18,29 +18,25 @@ pub const BaseEngine = struct {
     }
 };
 
-pub fn createRandomEngine(board: *Board) BaseEngine {
-    const engine = std.heap.page_allocator.create(RandomEngine) catch std.debug.panic("Failed to allocate RandomEngine", .{});
-    engine.* = RandomEngine.init(board);
-    return BaseEngine{
-        .impl = engine,
-        .vtable = EngineInterface{
-            .makeMove = &RandomEngine.makeMove,
-        },
-    };
-}
-
-pub fn destroyRandomEngine(engine: *BaseEngine) void {
-    const randomEngine: *RandomEngine = @ptrCast(@alignCast(engine.impl));
-    std.heap.page_allocator.destroy(randomEngine);
-}
-
 pub const RandomEngine = struct {
     board: *Board,
 
-    pub fn init(board: *Board) RandomEngine {
-        return RandomEngine{
+    pub fn init(board: *Board) BaseEngine {
+        const engine = std.heap.page_allocator.create(RandomEngine) catch std.debug.panic("Failed to allocate RandomEngine", .{});
+        engine.* = .{
             .board = board,
         };
+        return BaseEngine{
+            .impl = engine,
+            .vtable = EngineInterface{
+                .makeMove = &RandomEngine.makeMove,
+            },
+        };
+    }
+
+    pub fn deinit(self: *BaseEngine) void {
+        const randomEngine: *RandomEngine = @ptrCast(@alignCast(self.impl));
+        std.heap.page_allocator.destroy(randomEngine);
     }
 
     pub fn makeMove(context: *anyopaque) void {

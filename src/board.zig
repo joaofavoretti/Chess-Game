@@ -474,7 +474,7 @@ pub const Board = struct {
     fn isDraw(self: *Board) bool {
         const isStalemate = self.isGameOver and !self.isKingInCheck(self.getColorToMove());
 
-        return isStalemate or self.hasInsufficientMaterial() or self.amountOfMovesWithNoPawnOrCapture >= 50 or self.isThreeFoldRepetition();
+        return isStalemate or self.hasInsufficientMaterial() or self.amountOfMovesWithNoPawnOrCapture >= 100 or self.isThreeFoldRepetition();
     }
 
     pub fn makeMove(self: *Board, move: Move) void {

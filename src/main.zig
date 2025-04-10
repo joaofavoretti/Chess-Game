@@ -8,10 +8,9 @@ const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const BaseEngine = eng.BaseEngine;
-const createRandomEngine = eng.createRandomEngine;
-const destroyRandomEngine = eng.destroyRandomEngine;
+const RandomEngine = eng.RandomEngine;
 
-const TIME_PER_MOVE = 1.0;
+const TIME_PER_MOVE = 0.3;
 
 const GameState = struct {
     board: *Board,
@@ -23,7 +22,7 @@ const GameState = struct {
         board.* = Board.init();
 
         const engine = std.heap.page_allocator.create(BaseEngine) catch std.debug.panic("Failed to allocate Engine", .{});
-        engine.* = createRandomEngine(board);
+        engine.* = RandomEngine.init(board);
 
         board.moveCount = 10;
 
@@ -37,7 +36,7 @@ const GameState = struct {
         self.board.deinit();
         std.heap.page_allocator.destroy(self.board);
 
-        destroyRandomEngine(self.engine);
+        RandomEngine.deinit(self.engine);
         std.heap.page_allocator.destroy(self.engine);
     }
 };
@@ -57,14 +56,10 @@ fn destroy() void {
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
 
-    state.engine.makeMove();
-
     state.timeForMove += deltaTime;
     if (state.timeForMove >= TIME_PER_MOVE) {
         state.timeForMove = 0.0;
-        if (!state.board.isWhiteTurn) {
-            state.engine.makeMove();
-        }
+        state.engine.makeMove();
     }
 }
 
