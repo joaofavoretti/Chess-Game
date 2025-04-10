@@ -46,6 +46,7 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
     state.board.playSound(SoundType.GameStart);
+    std.debug.print("[*] Value for some hash 0x{x}\n", .{state.board.getBoardPositionHash()});
 }
 
 fn destroy() void {
@@ -55,7 +56,15 @@ fn destroy() void {
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
 
-    // state.engine.makeMove();
+    state.engine.makeMove();
+
+    // state.timeForMove += deltaTime;
+    // if (state.timeForMove >= TIME_PER_MOVE) {
+    //     state.timeForMove = 0.0;
+    //     if (!state.board.isWhiteTurn) {
+    //         state.engine.makeMove();
+    //     }
+    // }
 }
 
 fn draw() void {

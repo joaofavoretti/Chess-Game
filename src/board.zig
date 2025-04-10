@@ -51,32 +51,34 @@ pub const Board = struct {
     lastMove: ?Move = null,
 
     moveCount: i32 = 0,
+    boardPositionHistory: std.ArrayList(u64),
+    amountOfMovesWithNoPawnOrCapture: i32 = 0,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
         var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
 
-        // for (0..8) |i| {
-        //     const i_ = @as(i32, @intCast(i));
-        //     try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
-        //     try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
-        // }
-        //
-        // try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
-        // try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
-        // try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
-        // try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
-        //
-        // try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
-        // try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
-        // try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
-        // try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
-        //
-        // try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
-        // try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
-        // try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
-        // try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
-        //
-        // try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
+        for (0..8) |i| {
+            const i_ = @as(i32, @intCast(i));
+            try pieces.put(IVector2.init(i_, 6), Piece.init(IVector2.init(i_, 6), PieceColor.White, PieceType.Pawn));
+            try pieces.put(IVector2.init(i_, 1), Piece.init(IVector2.init(i_, 1), PieceColor.Black, PieceType.Pawn));
+        }
+
+        try pieces.put(IVector2.init(0, 7), Piece.init(IVector2.init(0, 7), PieceColor.White, PieceType.Rook));
+        try pieces.put(IVector2.init(7, 7), Piece.init(IVector2.init(7, 7), PieceColor.White, PieceType.Rook));
+        try pieces.put(IVector2.init(0, 0), Piece.init(IVector2.init(0, 0), PieceColor.Black, PieceType.Rook));
+        try pieces.put(IVector2.init(7, 0), Piece.init(IVector2.init(7, 0), PieceColor.Black, PieceType.Rook));
+
+        try pieces.put(IVector2.init(1, 7), Piece.init(IVector2.init(1, 7), PieceColor.White, PieceType.Knight));
+        try pieces.put(IVector2.init(6, 7), Piece.init(IVector2.init(6, 7), PieceColor.White, PieceType.Knight));
+        try pieces.put(IVector2.init(1, 0), Piece.init(IVector2.init(1, 0), PieceColor.Black, PieceType.Knight));
+        try pieces.put(IVector2.init(6, 0), Piece.init(IVector2.init(6, 0), PieceColor.Black, PieceType.Knight));
+
+        try pieces.put(IVector2.init(2, 7), Piece.init(IVector2.init(2, 7), PieceColor.White, PieceType.Bishop));
+        try pieces.put(IVector2.init(5, 7), Piece.init(IVector2.init(5, 7), PieceColor.White, PieceType.Bishop));
+        try pieces.put(IVector2.init(2, 0), Piece.init(IVector2.init(2, 0), PieceColor.Black, PieceType.Bishop));
+        try pieces.put(IVector2.init(5, 0), Piece.init(IVector2.init(5, 0), PieceColor.Black, PieceType.Bishop));
+
+        try pieces.put(IVector2.init(3, 7), Piece.init(IVector2.init(3, 7), PieceColor.White, PieceType.Queen));
         try pieces.put(IVector2.init(3, 0), Piece.init(IVector2.init(3, 0), PieceColor.Black, PieceType.Queen));
 
         try pieces.put(IVector2.init(4, 7), Piece.init(IVector2.init(4, 7), PieceColor.White, PieceType.King));
@@ -144,6 +146,7 @@ pub const Board = struct {
             .offsetX = offsetX,
             .offsetY = offsetY,
             .soundSystem = soundSystem,
+            .boardPositionHistory = std.ArrayList(u64).init(std.heap.page_allocator),
         };
     }
 
@@ -151,6 +154,7 @@ pub const Board = struct {
         self.pieces.deinit();
         self.unusedRooks.deinit();
         self.unusedKings.deinit();
+        self.boardPositionHistory.deinit();
 
         if (self.soundSystem) |*soundSystem| {
             soundSystem.deinit();
@@ -168,6 +172,7 @@ pub const Board = struct {
             return;
         }
 
+        // This code used to add some padding to the futuristic piece set
         // const pieceSize = piece.getSize();
 
         // if (pieceSize.x > self.tileSize or pieceSize.y > self.tileSize) {
@@ -280,12 +285,12 @@ pub const Board = struct {
 
         if (self.pieces.getPtr(move.from)) |piece| {
             var copy = self.getUndrawableCopy() catch std.debug.panic("Error getting a copy of the board\n", .{});
+            defer copy.deinit();
             if (copy.pieces.getPtr(move.from)) |copyPiece| {
                 copy.movePiece(copyPiece, move);
             }
 
             const isNotInCheck = !copy.isKingInCheck(piece.color);
-            copy.deinit();
             return isNotInCheck;
         }
 
@@ -332,6 +337,7 @@ pub const Board = struct {
             .possibleEnPassantPawn = possibleEnPassantPawn,
             .unusedRooks = unusedRooks,
             .unusedKings = unusedKings,
+            .boardPositionHistory = std.ArrayList(u64).init(std.heap.page_allocator),
         };
 
         return copyUndrawable;
@@ -361,6 +367,38 @@ pub const Board = struct {
             PieceColor.White => PieceColor.Black,
             PieceColor.Black => PieceColor.White,
         };
+    }
+
+    pub fn getBoardPositionHash(self: *Board) u64 {
+        var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+
+        // Maybe in a different way
+        for (0..8) |i| {
+            for (0..8) |j| {
+                const _i = @as(i32, @intCast(i));
+                const _j = @as(i32, @intCast(j));
+                const pos = IVector2.init(_i, _j);
+                if (self.pieces.getPtr(pos)) |piece| {
+                    hasher.update(@tagName(piece.color));
+                    hasher.update(@tagName(piece.pieceType));
+
+                    var vecToString: [128]u8 = undefined;
+                    const res = std.fmt.bufPrint(
+                        &vecToString,
+                        "{}",
+                        .{piece.boardPos},
+                    ) catch unreachable;
+
+                    hasher.update(res);
+                }
+            }
+        }
+
+        // That is wizardry to transform the first 8 bytes of the hash into a u64
+        var buf: [32]u8 = undefined;
+        hasher.final(&buf);
+        const partialBuffer: *[8]u8 = buf[0..8];
+        return std.mem.readInt(u64, partialBuffer, .little);
     }
 
     fn hasInsufficientMaterial(self: *Board) bool {
@@ -417,15 +455,34 @@ pub const Board = struct {
         return false;
     }
 
+    fn isThreeFoldRepetition(self: *Board) bool {
+        if (self.boardPositionHistory.items.len < 3) {
+            return false;
+        }
+
+        std.mem.sort(u64, self.boardPositionHistory.items, {}, std.sort.asc(u64));
+
+        for (2..self.boardPositionHistory.items.len) |i| {
+            if (self.boardPositionHistory.items[i] == self.boardPositionHistory.items[i - 2]) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     fn isDraw(self: *Board) bool {
         const isStalemate = self.isGameOver and !self.isKingInCheck(self.getColorToMove());
 
-        return isStalemate or self.hasInsufficientMaterial();
+        return isStalemate or self.hasInsufficientMaterial() or self.amountOfMovesWithNoPawnOrCapture >= 50 or self.isThreeFoldRepetition();
     }
 
     pub fn makeMove(self: *Board, move: Move) void {
         if (self.pieces.getPtr(move.from)) |piece| {
             self.movePiece(piece, move);
+            self.boardPositionHistory.append(self.getBoardPositionHash()) catch {
+                std.debug.panic("Error appending the board position hash to the array\n", .{});
+            };
 
             self.isWhiteTurn = !self.isWhiteTurn;
 
@@ -441,6 +498,7 @@ pub const Board = struct {
 
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
         self.moveCount += 1;
+        self.amountOfMovesWithNoPawnOrCapture += 1;
         std.debug.print("{} [movePiece] Moving {s} {s} from {} to {}\n", .{
             self.moveCount,
             @tagName(piece.color),
@@ -457,6 +515,10 @@ pub const Board = struct {
         var newPiece = piece.getCopy();
         newPiece.boardPos = move.to;
 
+        if (piece.pieceType == PieceType.Pawn) {
+            self.amountOfMovesWithNoPawnOrCapture = 0;
+        }
+
         if (move.getType() == MoveType.Promotion) {
             newPiece.setType(move.properties.Promotion.promotedTo);
             sound = SoundType.Promote;
@@ -468,6 +530,8 @@ pub const Board = struct {
         }
 
         if (move.getType() == MoveType.Capture) {
+            self.amountOfMovesWithNoPawnOrCapture = 0;
+
             if (move.properties.Capture.capturedPiece.pieceType == PieceType.Rook and self.unusedRooks.contains(move.properties.Capture.capturedPiece)) {
                 _ = self.unusedRooks.remove(move.properties.Capture.capturedPiece);
             }
@@ -477,6 +541,8 @@ pub const Board = struct {
         }
 
         if (move.getType() == MoveType.CapturePromotion) {
+            self.amountOfMovesWithNoPawnOrCapture = 0;
+
             newPiece.setType(move.properties.CapturePromotion.promotedTo);
 
             if (move.properties.CapturePromotion.capturedPiece.pieceType == PieceType.Rook and self.unusedRooks.contains(move.properties.CapturePromotion.capturedPiece)) {
