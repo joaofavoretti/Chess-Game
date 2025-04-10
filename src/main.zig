@@ -9,6 +9,7 @@ const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const BaseEngine = eng.BaseEngine;
 const createRandomEngine = eng.createRandomEngine;
+const destroyRandomEngine = eng.destroyRandomEngine;
 
 const TIME_PER_MOVE = 1.0;
 
@@ -36,6 +37,7 @@ const GameState = struct {
         self.board.deinit();
         std.heap.page_allocator.destroy(self.board);
 
+        destroyRandomEngine(self.engine);
         std.heap.page_allocator.destroy(self.engine);
     }
 };

@@ -2,8 +2,8 @@ const std = @import("std");
 const rl = @import("raylib");
 const Board = @import("board.zig").Board;
 
-// TODO: This still do not work
-// Take a look at this: https://github.com/tigerbeetle/tigerbeetle/blob/e0c33c8a72fc095290ff69fa995bac59627e0e75/src/clients/c/tb_client/context.zig#L33
+// TODO: Took the design from
+// https://github.com/tigerbeetle/tigerbeetle/blob/e0c33c8a72fc095290ff69fa995bac59627e0e75/src/clients/c/tb_client/context.zig#L33
 
 pub const EngineInterface = struct {
     makeMove: *const fn (self: *anyopaque) void,
@@ -27,6 +27,11 @@ pub fn createRandomEngine(board: *Board) BaseEngine {
             .makeMove = &RandomEngine.makeMove,
         },
     };
+}
+
+pub fn destroyRandomEngine(engine: *BaseEngine) void {
+    const randomEngine: *RandomEngine = @ptrCast(@alignCast(engine.impl));
+    std.heap.page_allocator.destroy(randomEngine);
 }
 
 pub const RandomEngine = struct {
