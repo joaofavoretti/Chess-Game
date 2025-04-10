@@ -1,31 +1,30 @@
 const std = @import("std");
 const rl = @import("raylib");
 const Board = @import("board.zig").Board;
-const Engine = @import("engine.zig").Engine;
+const eng = @import("engine.zig");
 const p = @import("piece.zig");
 const SoundType = @import("sound.zig").SoundType;
 const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
+const BaseEngine = eng.BaseEngine;
+const createRandomEngine = eng.createRandomEngine;
 
 const TIME_PER_MOVE = 1.0;
 
 const GameState = struct {
     board: *Board,
-    engine: *Engine,
+    engine: *BaseEngine,
     timeForMove: f32 = 0.0,
 
     pub fn init() GameState {
         var board = std.heap.page_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = Board.init();
 
-        const engine = std.heap.page_allocator.create(Engine) catch std.debug.panic("Failed to allocate Engine", .{});
-        engine.* = Engine.init(board);
+        const engine = std.heap.page_allocator.create(BaseEngine) catch std.debug.panic("Failed to allocate Engine", .{});
+        engine.* = createRandomEngine(board);
 
         board.moveCount = 10;
-
-        std.debug.print("[GameState] Board value of moveCount {}\n", .{board.moveCount});
-        std.debug.print("[GameState] Engine value of moveCount {}\n", .{engine.board.moveCount});
 
         return GameState{
             .board = board,
@@ -58,13 +57,13 @@ fn update(deltaTime: f32) void {
 
     state.engine.makeMove();
 
-    // state.timeForMove += deltaTime;
-    // if (state.timeForMove >= TIME_PER_MOVE) {
-    //     state.timeForMove = 0.0;
-    //     if (!state.board.isWhiteTurn) {
-    //         state.engine.makeMove();
-    //     }
-    // }
+    state.timeForMove += deltaTime;
+    if (state.timeForMove >= TIME_PER_MOVE) {
+        state.timeForMove = 0.0;
+        if (!state.board.isWhiteTurn) {
+            state.engine.makeMove();
+        }
+    }
 }
 
 fn draw() void {
@@ -73,8 +72,6 @@ fn draw() void {
 }
 
 pub fn main() !void {
-    // const screenWidth = 1024;
-    // const screenHeight = 768;
     const screenWidth = 960;
     const screenHeight = 720;
 
