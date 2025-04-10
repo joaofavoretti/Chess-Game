@@ -55,7 +55,7 @@ pub const Board = struct {
     amountOfMovesWithNoPawnOrCapture: i32 = 0,
 
     fn initPieces() !std.AutoHashMap(IVector2, Piece) {
-        var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
+        var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.c_allocator);
 
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
@@ -88,7 +88,7 @@ pub const Board = struct {
     }
 
     fn initUnusedRooks(pieces: std.AutoHashMap(IVector2, Piece)) !set.Set(*Piece) {
-        var unusedRooks = set.Set(*Piece).init(std.heap.page_allocator);
+        var unusedRooks = set.Set(*Piece).init(std.heap.c_allocator);
 
         var it = pieces.iterator();
         while (it.next()) |entry| {
@@ -102,7 +102,7 @@ pub const Board = struct {
     }
 
     fn initUnusedKings(pieces: std.AutoHashMap(IVector2, Piece)) !set.Set(*Piece) {
-        var unusedKings = set.Set(*Piece).init(std.heap.page_allocator);
+        var unusedKings = set.Set(*Piece).init(std.heap.c_allocator);
 
         var it = pieces.iterator();
         while (it.next()) |entry| {
@@ -146,7 +146,7 @@ pub const Board = struct {
             .offsetX = offsetX,
             .offsetY = offsetY,
             .soundSystem = soundSystem,
-            .boardPositionHistory = std.ArrayList(u64).init(std.heap.page_allocator),
+            .boardPositionHistory = std.ArrayList(u64).init(std.heap.c_allocator),
         };
     }
 
@@ -227,6 +227,7 @@ pub const Board = struct {
             }
 
             const moves = self.getPossibleMoves(piece) catch std.debug.panic("Error getting possible moves\n", .{});
+            defer moves.deinit();
             for (moves.items) |move| {
                 if (IVector2Eq(move.to, pos)) {
                     return true;
@@ -298,7 +299,7 @@ pub const Board = struct {
     }
 
     fn getUndrawableCopy(self: *Board) !Board {
-        var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.page_allocator);
+        var pieces = std.AutoHashMap(IVector2, Piece).init(std.heap.c_allocator);
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
             const piece = entry.value_ptr;
@@ -306,7 +307,7 @@ pub const Board = struct {
             _ = try pieces.put(piece.boardPos, newPiece);
         }
 
-        var unusedRooks = set.Set(*Piece).init(std.heap.page_allocator);
+        var unusedRooks = set.Set(*Piece).init(std.heap.c_allocator);
         var itRooks = self.unusedRooks.iterator();
         while (itRooks.next()) |entry| {
             if (pieces.getPtr(entry.*.boardPos)) |piece| {
@@ -314,7 +315,7 @@ pub const Board = struct {
             }
         }
 
-        var unusedKings = set.Set(*Piece).init(std.heap.page_allocator);
+        var unusedKings = set.Set(*Piece).init(std.heap.c_allocator);
         var itKings = self.unusedKings.iterator();
         while (itKings.next()) |entry| {
             if (pieces.getPtr(entry.*.boardPos)) |piece| {
@@ -337,7 +338,7 @@ pub const Board = struct {
             .possibleEnPassantPawn = possibleEnPassantPawn,
             .unusedRooks = unusedRooks,
             .unusedKings = unusedKings,
-            .boardPositionHistory = std.ArrayList(u64).init(std.heap.page_allocator),
+            .boardPositionHistory = std.ArrayList(u64).init(std.heap.c_allocator),
         };
 
         return copyUndrawable;
@@ -654,7 +655,7 @@ pub const Board = struct {
     }
 
     pub fn getAllValidMoves(self: *Board) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
@@ -710,7 +711,7 @@ pub const Board = struct {
     }
 
     fn getPawnPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const forward: i32 = switch (piece.color) {
             PieceColor.White => -1,
@@ -807,7 +808,7 @@ pub const Board = struct {
     }
 
     fn getRookPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const directions = [_]IVector2{
             IVector2.init(1, 0),
@@ -841,7 +842,7 @@ pub const Board = struct {
     }
 
     fn getKnightPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const directions = [_]IVector2{
             IVector2.init(1, 2),
@@ -879,7 +880,7 @@ pub const Board = struct {
     }
 
     fn getBishopPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const directions = [_]IVector2{
             IVector2.init(1, 1),
@@ -913,7 +914,7 @@ pub const Board = struct {
     }
 
     fn getQueenPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const directions = [_]IVector2{
             IVector2.init(1, 0),
@@ -951,7 +952,7 @@ pub const Board = struct {
     }
 
     fn getKingPossibleMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
-        var moves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
         const directions = [_]IVector2{
             IVector2.init(1, 0),
@@ -1043,7 +1044,7 @@ pub const Board = struct {
     fn getValidMoves(self: *Board, piece: *Piece) !std.ArrayList(Move) {
         const moves = try self.getPossibleMoves(piece);
 
-        var validMoves = std.ArrayList(Move).init(std.heap.page_allocator);
+        var validMoves = std.ArrayList(Move).init(std.heap.c_allocator);
         for (moves.items) |move| {
             if (self.isMoveValid(move)) {
                 _ = validMoves.append(move) catch {

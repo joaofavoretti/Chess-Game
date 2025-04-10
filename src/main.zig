@@ -18,10 +18,10 @@ const GameState = struct {
     timeForMove: f32 = 0.0,
 
     pub fn init() GameState {
-        var board = std.heap.page_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
+        var board = std.heap.c_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = Board.init();
 
-        const engine = std.heap.page_allocator.create(BaseEngine) catch std.debug.panic("Failed to allocate Engine", .{});
+        const engine = std.heap.c_allocator.create(BaseEngine) catch std.debug.panic("Failed to allocate Engine", .{});
         engine.* = RandomEngine.init(board);
 
         board.moveCount = 10;
@@ -34,10 +34,10 @@ const GameState = struct {
 
     pub fn deinit(self: *GameState) void {
         self.board.deinit();
-        std.heap.page_allocator.destroy(self.board);
+        std.heap.c_allocator.destroy(self.board);
 
         RandomEngine.deinit(self.engine);
-        std.heap.page_allocator.destroy(self.engine);
+        std.heap.c_allocator.destroy(self.engine);
     }
 };
 

@@ -22,7 +22,7 @@ pub const RandomEngine = struct {
     board: *Board,
 
     pub fn init(board: *Board) BaseEngine {
-        const engine = std.heap.page_allocator.create(RandomEngine) catch std.debug.panic("Failed to allocate RandomEngine", .{});
+        const engine = std.heap.c_allocator.create(RandomEngine) catch std.debug.panic("Failed to allocate RandomEngine", .{});
         engine.* = .{
             .board = board,
         };
@@ -36,7 +36,7 @@ pub const RandomEngine = struct {
 
     pub fn deinit(self: *BaseEngine) void {
         const randomEngine: *RandomEngine = @ptrCast(@alignCast(self.impl));
-        std.heap.page_allocator.destroy(randomEngine);
+        std.heap.c_allocator.destroy(randomEngine);
     }
 
     pub fn makeMove(context: *anyopaque) void {
