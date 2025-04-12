@@ -46,7 +46,14 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
     state.board.playSound(SoundType.GameStart);
-    std.debug.print("[*] Value for some hash 0x{x}\n", .{state.board.getBoardPositionHash()});
+
+    // Count all possible moves
+    std.io.getStdOut().writer().print("countPossibleMoves(1): {}\n", .{state.board.countPossibleMoves(1)}) catch std.debug.panic("Failed to print", .{});
+    std.io.getStdOut().writer().print("countPossibleMoves(2): {}\n", .{state.board.countPossibleMoves(2)}) catch std.debug.panic("Failed to print", .{});
+    std.io.getStdOut().writer().print("countPossibleMoves(3): {}\n", .{state.board.countPossibleMoves(3)}) catch std.debug.panic("Failed to print", .{});
+    std.io.getStdOut().writer().print("countPossibleMoves(4): {}\n", .{state.board.countPossibleMoves(4)}) catch std.debug.panic("Failed to print", .{});
+
+    // std.log.info("countPossibleMoves(3): {}\n", .{state.board.countPossibleMoves(3)});
 }
 
 fn destroy() void {
@@ -56,11 +63,11 @@ fn destroy() void {
 fn update(deltaTime: f32) void {
     state.board.update(deltaTime);
 
-    state.timeForMove += deltaTime;
-    if (state.timeForMove >= TIME_PER_MOVE) {
-        state.timeForMove = 0.0;
-        state.engine.makeMove();
-    }
+    // state.timeForMove += deltaTime;
+    // if (state.timeForMove >= TIME_PER_MOVE) {
+    //     state.timeForMove = 0.0;
+    //     state.engine.makeMove();
+    // }
 }
 
 fn draw() void {

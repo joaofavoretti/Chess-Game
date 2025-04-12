@@ -1,3 +1,7 @@
+// References
+// https://healeycodes.com/building-my-own-chess-engine
+// https://www.chessprogramming.org/Simplified_Evaluation_Function
+
 const std = @import("std");
 const rl = @import("raylib");
 const Board = @import("board.zig").Board;
@@ -43,7 +47,7 @@ pub const RandomEngine = struct {
         const self: *RandomEngine = @ptrCast(@alignCast(context));
 
         if (self.board.isGameOver) {
-            std.debug.print("[Engine] Game is over, no moves can be made\n", .{});
+            std.log.info("[Engine] Game is over, no moves can be made", .{});
             return;
         }
 
@@ -58,3 +62,6 @@ pub const RandomEngine = struct {
         moves.deinit();
     }
 };
+
+// TODO: Take a look at this evaluations and design
+pub const MiniMaxEngine = struct {};

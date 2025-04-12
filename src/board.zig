@@ -176,7 +176,7 @@ pub const Board = struct {
         // const pieceSize = piece.getSize();
 
         // if (pieceSize.x > self.tileSize or pieceSize.y > self.tileSize) {
-        //     std.debug.print("Piece size is bigger than tile size\n", .{});
+        //     std.log.info("Piece size is bigger than tile size\n", .{});
         //     return;
         // }
 
@@ -209,7 +209,7 @@ pub const Board = struct {
 
     fn isPositionBeingAttacked(self: *Board, pos: IVector2, colorAttacking: PieceColor) bool {
         if (self.pieces.getPtr(pos)) |piece| {
-            std.debug.print("{} [isPositionBeingAttacked] Checking if position {} ({s} {s}) is being attacked by {s}\n", .{
+            std.log.info("{} [isPositionBeingAttacked] Checking if position {} ({s} {s}) is being attacked by {s}\n", .{
                 self.moveCount,
                 pos,
                 @tagName(piece.color),
@@ -217,7 +217,7 @@ pub const Board = struct {
                 @tagName(colorAttacking),
             });
         } else {
-            std.debug.print("{} [isPositionBeingAttacked] Checking if position {} (Empty) is being attacked by {s}\n", .{ self.moveCount, pos, @tagName(colorAttacking) });
+            std.log.info("{} [isPositionBeingAttacked] Checking if position {} (Empty) is being attacked by {s}\n", .{ self.moveCount, pos, @tagName(colorAttacking) });
         }
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
@@ -239,7 +239,7 @@ pub const Board = struct {
     }
 
     fn isKingInCheck(self: *Board, kingColor: PieceColor) bool {
-        std.debug.print("{} [isKingInCheck] Checking if king {s} is in check\n", .{ self.moveCount, @tagName(kingColor) });
+        std.log.info("{} [isKingInCheck] Checking if king {s} is in check\n", .{ self.moveCount, @tagName(kingColor) });
         var it = self.pieces.iterator();
         while (it.next()) |entry| {
             const piece = entry.value_ptr;
@@ -255,7 +255,7 @@ pub const Board = struct {
     }
 
     fn isMoveValid(self: *Board, move: Move) bool {
-        std.debug.print("{} [isMoveValid] Verifying if move {s} from {} to {} is valid\n", .{
+        std.log.info("{} [isMoveValid] Verifying if move {s} from {} to {} is valid\n", .{
             self.moveCount,
             @tagName(move.getType()),
             move.from,
@@ -265,7 +265,7 @@ pub const Board = struct {
         // Verify if all the king journey to the new position is valid
         if (move.getType() == MoveType.Castle) {
             if (self.isKingInCheck(self.getColorToMove())) {
-                std.debug.print("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
+                std.log.info("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
                 return false;
             }
 
@@ -277,7 +277,7 @@ pub const Board = struct {
                     x += if (move.to.x > king.boardPos.x) 1 else -1;
                     const pos = IVector2.init(x, king.boardPos.y);
                     if (self.isPositionBeingAttacked(pos, attackingColor)) {
-                        std.debug.print("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
+                        std.log.info("{} [isMoveValid] Move is invalid because the king is in check\n", .{self.moveCount});
                         return false;
                     }
                 }
@@ -500,7 +500,7 @@ pub const Board = struct {
     fn movePiece(self: *Board, piece: *Piece, move: Move) void {
         self.moveCount += 1;
         self.amountOfMovesWithNoPawnOrCapture += 1;
-        std.debug.print("{} [movePiece] Moving {s} {s} from {} to {}\n", .{
+        std.log.info("{} [movePiece] Moving {s} {s} from {} to {}\n", .{
             self.moveCount,
             @tagName(piece.color),
             @tagName(piece.pieceType),
@@ -561,7 +561,7 @@ pub const Board = struct {
 
         // Store that the last move was a double pawn move in case of en passant
         if (move.getType() == MoveType.DoublePawn) {
-            std.debug.print("Assigning possible en passant pawn\n", .{});
+            std.log.info("Assigning possible en passant pawn\n", .{});
             self.possibleEnPassantPawn = self.pieces.getPtr(move.to);
         } else {
             self.possibleEnPassantPawn = null;
@@ -654,6 +654,38 @@ pub const Board = struct {
         }
     }
 
+    pub fn countValidMoves(self: *Board, depth: usize) usize {
+        if (depth == 0 or self.isGameOver) {
+            return 0;
+        }
+
+        var totalMoves: usize = 0;
+
+        // Get all valid moves for the current board state
+        const moves = self.getAllValidMoves() catch {
+            std.debug.panic("Error getting all valid moves\n", .{});
+        };
+        defer moves.deinit();
+
+        // If depth is 1, simply return the number of valid moves
+        if (depth == 1) {
+            return moves.items.len;
+        }
+
+        // For each move, apply it, count the moves recursively, and undo the move
+        for (moves.items) |move| {
+            var boardCopy = self.getUndrawableCopy() catch {
+                std.debug.panic("Error creating a copy of the board\n", .{});
+            };
+            defer boardCopy.deinit();
+
+            boardCopy.makeMove(move);
+            totalMoves += boardCopy.countValidMoves(depth - 1);
+        }
+
+        return totalMoves;
+    }
+
     pub fn getAllValidMoves(self: *Board) !std.ArrayList(Move) {
         var moves = std.ArrayList(Move).init(std.heap.c_allocator);
 
@@ -661,7 +693,7 @@ pub const Board = struct {
         while (it.next()) |entry| {
             const piece = entry.value_ptr;
 
-            std.debug.print("{} [getAllValidMoves] Checking piece {s} {s} at {} for possible moves\n", .{
+            std.log.info("{} [getAllValidMoves] Checking piece {s} {s} at {} for possible moves\n", .{
                 self.moveCount,
                 @tagName(piece.color),
                 @tagName(piece.pieceType),
@@ -697,7 +729,7 @@ pub const Board = struct {
             moves.deinit();
         }
 
-        std.debug.print("Done checking possible moves\n", .{});
+        std.log.info("Done checking possible moves\n", .{});
 
         return false;
     }
