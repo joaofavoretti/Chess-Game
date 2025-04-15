@@ -1,6 +1,9 @@
 const std = @import("std");
 const rl = @import("raylib");
-const IVector2 = @import("ivector.zig").IVector2;
+const ivec = @import("ivector.zig");
+
+const IVector2 = ivec.IVector2;
+const IVector2Eq = ivec.IVector2Eq;
 
 const PieceType = enum {
     Pawn,
@@ -36,6 +39,12 @@ const Board = struct {
         const one: u64 = 1;
         const bitboard = one << square;
         self.setBitboard(color, piece, self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] | bitboard);
+    }
+
+    fn clearPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
+        const one: u64 = 1;
+        const bitboard = one << square;
+        self.setBitboard(color, piece, self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] & ~bitboard);
     }
 
     fn initFromFEN(fen: []const u8) Board {
@@ -97,7 +106,7 @@ const Board = struct {
         return board;
     }
 
-    fn parseSquare(square: []const u8) u8 {
+    pub fn parseSquare(square: []const u8) u8 {
         if (square.len != 2) @panic("Invalid square format");
         const file = square[0] - 'a';
         const rank = square[1] - '1';
@@ -139,6 +148,7 @@ const Render = struct {
     textures: [PieceColorLength][PieceTypeLength]rl.Texture2D,
     tileSize: i32,
     offset: IVector2,
+    inverted: bool = false,
 
     fn getTextureFromPiece(pieceColor: PieceColor, pieceType: PieceType) !rl.Texture2D {
         var buf: std.BoundedArray(u8, 128) = .{};
@@ -184,11 +194,44 @@ const Render = struct {
         }
     }
 
-    fn isWhiteTile(_: *Render, pos: IVector2) bool {
+    fn isWhiteTile(self: *Render, square: u6) bool {
+        const pos = self.getPosFromSquare(square);
         return (@mod((pos.x + pos.y), 2) == 0);
     }
 
-    fn drawBoard(self: *Render) void {
+    pub fn getPosFromSquare(self: *Render, square: u6) IVector2 {
+        var pos = IVector2.init(square % 8, square / 8);
+        if (!self.inverted) {
+            pos.x = (7 - pos.x);
+        }
+
+        if (self.inverted) {
+            pos.y = (7 - pos.y);
+        }
+
+        return pos;
+    }
+
+    pub fn getSquareFromPos(self: *Render, pos: IVector2) u6 {
+        if (pos.x >= 8 or pos.y >= 8) {
+            return 0;
+        }
+
+        // 2, 1 -> 5
+
+        var x = (7 - pos.x); // 1
+        var y = pos.y; // 1
+
+        if (self.inverted) {
+            x = pos.x; // 2
+            y = (7 - pos.y); // 2
+        }
+
+        return @intCast(y * 8 + x); // 4 * 1 + 1 = 5
+        // 4 * 2 + 2 = 9
+    }
+
+    pub fn drawBoard(self: *Render) void {
         for (0..8) |i| {
             const i_ = @as(i32, @intCast(i));
             for (0..8) |j| {
@@ -198,7 +241,8 @@ const Render = struct {
 
                 var color = self.BLACK_TILE_COLOR;
 
-                if (self.isWhiteTile(IVector2.init(i_, j_))) {
+                const square = @as(u6, @intCast(j_ * 8 + i_));
+                if (self.isWhiteTile(square)) {
                     color = self.WHITE_TILE_COLOR;
                 }
 
@@ -213,10 +257,58 @@ const Render = struct {
         }
     }
 
-    fn drawPiece(self: *Render, pieceColor: PieceColor, pieceType: PieceType, pos: IVector2) void {
+    pub fn drawSquareNumbers(self: *Render) void {
+        for (0..8) |i| {
+            for (0..8) |j| {
+                const square = @as(u6, @intCast(j * 8 + i));
+
+                const pos = self.getPosFromSquare(square);
+
+                const x = self.offset.x + pos.x * self.tileSize;
+                const y = self.offset.y + pos.y * self.tileSize;
+
+                var buf: [20]u8 = .{0} ** 20;
+                _ = std.fmt.bufPrint(&buf, "{}", .{square}) catch std.debug.panic("Failed to format square number", .{});
+                const squareNumber: [:0]const u8 = @ptrCast(&buf);
+
+                const color = if (self.isWhiteTile(square)) rl.Color.white else rl.Color.black;
+                rl.drawText(
+                    squareNumber,
+                    x + 5,
+                    y + self.tileSize - 20 - 5,
+                    20,
+                    color,
+                );
+            }
+        }
+    }
+
+    fn highlightTile(self: *Render, square: u6) void {
+        const pos = self.getPosFromSquare(square);
+
+        const color = if (self.isWhiteTile(square)) self.ACTIVE_BLACK_TILE_COLOR else self.ACTIVE_WHITE_TILE_COLOR;
+
+        const x = self.offset.x + pos.x * self.tileSize;
+        const y = self.offset.y + pos.y * self.tileSize;
+
+        rl.drawRectangle(
+            x,
+            y,
+            self.tileSize,
+            self.tileSize,
+            color,
+        );
+    }
+
+    fn drawPiece(self: *Render, pieceColor: PieceColor, pieceType: PieceType, square: u6) void {
+        const pos = self.getPosFromSquare(square);
+
+        const x = self.offset.x + pos.x * self.tileSize;
+        const y = self.offset.y + pos.y * self.tileSize;
+
         const dest = rl.Rectangle.init(
-            @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)),
-            @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)),
+            @as(f32, @floatFromInt(x)),
+            @as(f32, @floatFromInt(y)),
             @as(f32, @floatFromInt(self.tileSize)),
             @as(f32, @floatFromInt(self.tileSize)),
         );
@@ -242,22 +334,17 @@ const Render = struct {
         return count;
     }
 
-    pub fn draw(self: *Render, board: *Board) void {
-        self.drawBoard();
-
+    pub fn drawPieces(self: *Render, board: *Board) void {
         for (0..PieceColorLength) |color| {
             for (0..PieceTypeLength) |piece| {
                 const pieceColor: PieceColor = @enumFromInt(color);
                 const pieceType: PieceType = @enumFromInt(piece);
                 var bitboard = board.boards[color][piece];
                 const one: u64 = 1;
-                var pos = IVector2.init(0, 0);
 
                 while (bitboard != 0) {
                     const square = Render.countTrailingZeros(bitboard);
-                    pos.x = square % 8;
-                    pos.y = square / 8;
-                    self.drawPiece(pieceColor, pieceType, pos);
+                    self.drawPiece(pieceColor, pieceType, square);
                     bitboard &= ~(one << square);
                 }
             }
@@ -282,9 +369,69 @@ const Render = struct {
     }
 };
 
+const Controller = struct {
+    tileSize: i32,
+    offset: IVector2,
+    selectedSquare: u6 = 0,
+    isSelecting: bool = false,
+
+    pub fn init(baseRender: *Render) Controller {
+        return Controller{
+            .tileSize = baseRender.tileSize,
+            .offset = baseRender.offset,
+        };
+    }
+
+    pub fn update(self: *Controller, render: *Render, board: *Board) void {
+        _ = board;
+        if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
+            if (self.isMouseOverBoard()) {
+                self.isSelecting = true;
+                const pos = self.getMousePosition();
+                const square = render.getSquareFromPos(pos);
+
+                if (square == self.selectedSquare and self.isSelecting) {
+                    self.isSelecting = false;
+                }
+
+                self.selectedSquare = square;
+            }
+        }
+    }
+
+    fn isMouseOverBoard(self: *Controller) bool {
+        const mousePos = IVector2.fromVector2(rl.getMousePosition());
+        return (mousePos.x >= self.offset.x and
+            mousePos.x < self.offset.x + self.tileSize * 8 and
+            mousePos.y >= self.offset.y and
+            mousePos.y < self.offset.y + self.tileSize * 8);
+    }
+
+    fn getMousePosition(self: *Controller) IVector2 {
+        if (!self.isMouseOverBoard()) {
+            return IVector2.init(0, 0);
+        }
+
+        const mousePos = IVector2.fromVector2(rl.getMousePosition());
+        const x = @as(u6, @intCast(@divFloor(mousePos.x - self.offset.x, self.tileSize)));
+        const y = @as(u6, @intCast(@divFloor(mousePos.y - self.offset.y, self.tileSize)));
+        return IVector2.init(x, y);
+    }
+
+    pub fn movePiece(self: *Controller, board: *Board, from: u6, to: u6) void {
+        _ = self;
+        const piece = board.getPiece(from);
+        if (piece != 0) {
+            board.setPiece(PieceColor.White, PieceType.Pawn, to);
+            board.clearPiece(PieceColor.White, PieceType.Pawn, from);
+        }
+    }
+};
+
 const GameState = struct {
     render: *Render,
     board: *Board,
+    controller: *Controller,
 
     pub fn init() GameState {
         const render = std.heap.c_allocator.create(Render) catch std.debug.panic("Failed to allocate Render", .{});
@@ -293,9 +440,13 @@ const GameState = struct {
         const board = std.heap.c_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = Board.initFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
+        const controller = std.heap.c_allocator.create(Controller) catch std.debug.panic("Failed to allocate Controller", .{});
+        controller.* = Controller.init(render);
+
         return GameState{
             .render = render,
             .board = board,
+            .controller = controller,
         };
     }
 
@@ -303,6 +454,7 @@ const GameState = struct {
         self.render.deinit();
         std.heap.c_allocator.destroy(self.render);
         std.heap.c_allocator.destroy(self.board);
+        std.heap.c_allocator.destroy(self.controller);
     }
 };
 
@@ -310,6 +462,8 @@ var state: GameState = undefined;
 
 fn setup() void {
     state = GameState.init();
+
+    state.controller.movePiece(state.board, 8, 16);
 
     Render.print(state.board);
 }
@@ -320,11 +474,22 @@ fn destroy() void {
 
 fn update(deltaTime: f32) void {
     _ = deltaTime;
+
+    if (rl.isKeyPressed(rl.KeyboardKey.r)) {
+        state.render.inverted = !state.render.inverted;
+    }
+
+    state.controller.update(state.render, state.board);
 }
 
 fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
-    state.render.draw(state.board);
+    state.render.drawBoard();
+    // state.render.drawSquareNumbers();
+    if (state.controller.isSelecting) {
+        state.render.highlightTile(state.controller.selectedSquare);
+    }
+    state.render.drawPieces(state.board);
 }
 
 pub fn main() !void {
