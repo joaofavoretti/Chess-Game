@@ -21,6 +21,37 @@ const PieceColor = enum {
 };
 const PieceColorLength = @typeInfo(PieceColor).@"enum".fields.len;
 
+const Piece = packed struct(u8) {
+    color: u1 = 0,
+    pieceType: u3 = 0,
+    valid: bool = true,
+    _padding: u3 = 0,
+
+    pub fn init(color: PieceColor, pieceType: PieceType) Piece {
+        return Piece{
+            .color = @intFromEnum(color),
+            .pieceType = @intFromEnum(pieceType),
+        };
+    }
+
+    pub fn initInvalid() Piece {
+        return Piece{
+            .color = 0,
+            .pieceType = 0,
+            .valid = false,
+            ._padding = 0,
+        };
+    }
+
+    pub fn getColor(self: *Piece) PieceColor {
+        return @enumFromInt(self.color);
+    }
+
+    pub fn getPieceType(self: *Piece) PieceType {
+        return @enumFromInt(self.pieceType);
+    }
+};
+
 const Bitboard = u64;
 
 const Board = struct {
@@ -113,7 +144,7 @@ const Board = struct {
         return rank * 8 + file;
     }
 
-    fn getPiece(self: *Board, square: u6) u8 {
+    pub fn getPieceChar(self: *Board, square: u6) u8 {
         for (0..PieceColorLength) |c| {
             const color: PieceColor = @enumFromInt(c);
             for (0..PieceTypeLength) |p| {
@@ -132,6 +163,20 @@ const Board = struct {
             }
         }
         return 0;
+    }
+
+    pub fn getPiece(self: *Board, square: u6) Piece {
+        for (0..PieceColorLength) |c| {
+            const color: PieceColor = @enumFromInt(c);
+            for (0..PieceTypeLength) |p| {
+                const piece: PieceType = @enumFromInt(p);
+                const bitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))];
+                if ((bitboard >> square) & 1 == 1) {
+                    return Piece.init(color, piece);
+                }
+            }
+        }
+        return Piece.initInvalid();
     }
 };
 
@@ -217,18 +262,15 @@ const Render = struct {
             return 0;
         }
 
-        // 2, 1 -> 5
-
-        var x = (7 - pos.x); // 1
-        var y = pos.y; // 1
+        var x = (7 - pos.x);
+        var y = pos.y;
 
         if (self.inverted) {
-            x = pos.x; // 2
-            y = (7 - pos.y); // 2
+            x = pos.x;
+            y = (7 - pos.y);
         }
 
-        return @intCast(y * 8 + x); // 4 * 1 + 1 = 5
-        // 4 * 2 + 2 = 9
+        return @intCast(y * 8 + x);
     }
 
     pub fn drawBoard(self: *Render) void {
@@ -357,7 +399,7 @@ const Render = struct {
         for (0..8) |rank| {
             for (0..8) |file| {
                 const square = @as(u6, @intCast(rank * 8 + file));
-                const piece = board.getPiece(square);
+                const piece = board.getPieceChar(square);
                 if (piece != 0) {
                     std.debug.print("{c} ", .{piece});
                 } else {
@@ -383,13 +425,18 @@ const Controller = struct {
     }
 
     pub fn update(self: *Controller, render: *Render, board: *Board) void {
-        _ = board;
         if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
             if (self.isMouseOverBoard()) {
-                self.isSelecting = true;
+                std.log.info("Selecting square", .{});
                 const pos = self.getMousePosition();
                 const square = render.getSquareFromPos(pos);
 
+                if (square != self.selectedSquare and self.isSelecting) {
+                    self.movePiece(board, self.selectedSquare, square);
+                    self.selectedSquare = square;
+                }
+
+                self.isSelecting = true;
                 if (square == self.selectedSquare and self.isSelecting) {
                     self.isSelecting = false;
                 }
@@ -420,10 +467,10 @@ const Controller = struct {
 
     pub fn movePiece(self: *Controller, board: *Board, from: u6, to: u6) void {
         _ = self;
-        const piece = board.getPiece(from);
-        if (piece != 0) {
-            board.setPiece(PieceColor.White, PieceType.Pawn, to);
-            board.clearPiece(PieceColor.White, PieceType.Pawn, from);
+        var piece = board.getPiece(from);
+        if (piece.valid) {
+            board.clearPiece(piece.getColor(), piece.getPieceType(), from);
+            board.setPiece(piece.getColor(), piece.getPieceType(), to);
         }
     }
 };
