@@ -411,11 +411,32 @@ const Render = struct {
     }
 };
 
+const SelectedSquare = struct {
+    square: u6 = 0,
+    isSelected: bool = false,
+
+    pub fn init() SelectedSquare {
+        return SelectedSquare{
+            .square = 0,
+            .isSelected = false,
+        };
+    }
+
+    pub fn setSquare(self: *SelectedSquare, square: u6) void {
+        self.square = square;
+        self.isSelected = true;
+    }
+
+    pub fn clear(self: *SelectedSquare) void {
+        self.square = 0;
+        self.isSelected = false;
+    }
+};
+
 const Controller = struct {
     tileSize: i32,
     offset: IVector2,
-    selectedSquare: u6 = 0,
-    isSelecting: bool = false,
+    selectedSquare: SelectedSquare = SelectedSquare.init(),
 
     pub fn init(baseRender: *Render) Controller {
         return Controller{
@@ -424,26 +445,27 @@ const Controller = struct {
         };
     }
 
-    pub fn update(self: *Controller, render: *Render, board: *Board) void {
+    fn updateSelectedSquare(self: *Controller, render: *Render, board: *Board) void {
         if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
             if (self.isMouseOverBoard()) {
-                std.log.info("Selecting square", .{});
                 const pos = self.getMousePosition();
                 const square = render.getSquareFromPos(pos);
 
-                if (square != self.selectedSquare and self.isSelecting) {
-                    self.movePiece(board, self.selectedSquare, square);
-                    self.selectedSquare = square;
+                if (self.selectedSquare.isSelected and board.getPiece(self.selectedSquare.square).valid) {
+                    const from = self.selectedSquare.square;
+                    self.movePiece(board, from, square);
+                    self.selectedSquare.clear();
+                } else if (self.selectedSquare.isSelected and self.selectedSquare.square == square) {
+                    self.selectedSquare.clear();
+                } else {
+                    self.selectedSquare.setSquare(square);
                 }
-
-                self.isSelecting = true;
-                if (square == self.selectedSquare and self.isSelecting) {
-                    self.isSelecting = false;
-                }
-
-                self.selectedSquare = square;
             }
         }
+    }
+
+    pub fn update(self: *Controller, render: *Render, board: *Board) void {
+        self.updateSelectedSquare(render, board);
     }
 
     fn isMouseOverBoard(self: *Controller) bool {
@@ -533,8 +555,8 @@ fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
     // state.render.drawSquareNumbers();
-    if (state.controller.isSelecting) {
-        state.render.highlightTile(state.controller.selectedSquare);
+    if (state.controller.selectedSquare.isSelected) {
+        state.render.highlightTile(state.controller.selectedSquare.square);
     }
     state.render.drawPieces(state.board);
 }
