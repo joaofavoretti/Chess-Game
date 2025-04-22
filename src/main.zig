@@ -180,6 +180,58 @@ const Board = struct {
     }
 };
 
+const MoveCode = enum(u4) {
+    // Bits: Promotion, Capture, Special 1, Special 2
+    QuietMove = 0b0000,
+    DoublePawnPush = 0b0001,
+    KingCastle = 0b0010,
+    QueenCastle = 0b0011,
+    Capture = 0b0100,
+    EnPassant = 0b0101,
+    KnightPromotion = 0b1000,
+    BishopPromotion = 0b1001,
+    RookPromotion = 0b1010,
+    QueenPromotion = 0b1011,
+    KnightPromotionCapture = 0b1100,
+    BishopPromotionCapture = 0b1101,
+    RookPromotionCapture = 0b1110,
+    QueenPromotionCapture = 0b1111,
+
+    pub fn isCapture(self: MoveCode) bool {
+        return (@intFromEnum(self) & 0b0100) != 0;
+    }
+};
+
+pub const Move = struct {
+    from: u6,
+    to: u6,
+    code: MoveCode,
+    capturedPiece: Piece = Piece.initInvalid(),
+
+    pub fn init(from: u6, to: u6, code: MoveCode) Move {
+        return Move{
+            .from = from,
+            .to = to,
+            .code = code,
+        };
+    }
+
+    pub fn initCapture(from: u6, to: u6, code: MoveCode, capturedPiece: Piece) Move {
+        return Move{
+            .from = from,
+            .to = to,
+            .code = code,
+            .capturedPiece = capturedPiece,
+        };
+    }
+
+    pub fn isValid(self: *Move) bool {
+        return self.from != self.to;
+    }
+};
+
+const MoveGenerator = struct {};
+
 const TEXTURE_ASSET_PATH = "./assets/pieces/default";
 const TEXTURE_DEFAULT_PATH = TEXTURE_ASSET_PATH ++ "/Default.png";
 
@@ -325,6 +377,38 @@ const Render = struct {
         }
     }
 
+    pub fn drawPossibleMoves(self: *Render, controller: *Controller) void {
+        const radius = @divTrunc(self.tileSize, 6);
+        const padding = @divTrunc(self.tileSize - radius * 2, 2);
+
+        const moves = controller.pseudoLegalMoves.constSlice();
+
+        for (0..moves.len) |i| {
+            const move: Move = moves[i];
+            const square = move.to;
+            const pos = self.getPosFromSquare(square);
+
+            const center = rl.Vector2.init(
+                @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize + padding + radius)),
+                @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
+            );
+
+            if (move.code.isCapture()) {
+                const size = @as(f32, @floatFromInt(self.tileSize));
+                const rect = rl.Rectangle{
+                    .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
+                    .y = @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)) + 6.0,
+                    .width = size - 12.0,
+                    .height = size - 12.0,
+                };
+
+                rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+            } else {
+                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+            }
+        }
+    }
+
     fn highlightTile(self: *Render, square: u6) void {
         const pos = self.getPosFromSquare(square);
 
@@ -437,12 +521,67 @@ const Controller = struct {
     tileSize: i32,
     offset: IVector2,
     selectedSquare: SelectedSquare = SelectedSquare.init(),
+    pseudoLegalMoves: std.BoundedArray(Move, 64) = .{},
 
     pub fn init(baseRender: *Render) Controller {
         return Controller{
             .tileSize = baseRender.tileSize,
             .offset = baseRender.offset,
         };
+    }
+
+    fn updatePawnMoves(self: *Controller, board: *Board) void {
+        std.log.info("Updating pawn moves", .{});
+        var piece = board.getPiece(self.selectedSquare.square);
+        const color = piece.getColor();
+        const direction: i32 = if (color == PieceColor.White) 1 else -1;
+
+        // Capture diagonally
+        for (0..2) |i| {
+            const i_ = @as(i32, @intCast(i));
+            const targetSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 8 + (i_ * 2 - 1)));
+            var targetPiece = board.getPiece(targetSquare);
+            if (targetPiece.valid and targetPiece.getColor() != color) {
+                std.log.info("Capture move", .{});
+                self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+            }
+        }
+
+        // Move forward
+        const forwardSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 8));
+        const forwardPiece = board.getPiece(forwardSquare);
+        if (!forwardPiece.valid) {
+            std.log.info("Quiet move", .{});
+            self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+
+            // Double pawn push
+            const doubleForwardSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 16));
+            const doubleForwardPiece = board.getPiece(doubleForwardSquare);
+            const initialFile: i32 = if (color == PieceColor.White) 1 else 6;
+            const isInitialPosition = (self.selectedSquare.square / 8) == initialFile;
+            if (!doubleForwardPiece.valid and isInitialPosition) {
+                std.log.info("Double pawn push", .{});
+                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, doubleForwardSquare, MoveCode.DoublePawnPush)) catch std.debug.panic("Failed to append move", .{});
+            }
+        }
+    }
+
+    fn updatePseudoLegalMoves(self: *Controller, board: *Board) void {
+        // clear the pseudoLegalMoves
+        self.pseudoLegalMoves.clear();
+
+        if (self.selectedSquare.isSelected) {
+            var piece = board.getPiece(self.selectedSquare.square);
+
+            if (!piece.valid) {
+                return;
+            }
+
+            switch (piece.getPieceType()) {
+                PieceType.Pawn => self.updatePawnMoves(board),
+                else => {},
+            }
+        }
     }
 
     fn updateSelectedSquare(self: *Controller, render: *Render, board: *Board) void {
@@ -455,10 +594,13 @@ const Controller = struct {
                     const from = self.selectedSquare.square;
                     self.movePiece(board, from, square);
                     self.selectedSquare.clear();
+                    self.pseudoLegalMoves.clear();
                 } else if (self.selectedSquare.isSelected and self.selectedSquare.square == square) {
                     self.selectedSquare.clear();
+                    self.pseudoLegalMoves.clear();
                 } else {
                     self.selectedSquare.setSquare(square);
+                    self.updatePseudoLegalMoves(board);
                 }
             }
         }
@@ -554,10 +696,11 @@ fn update(deltaTime: f32) void {
 fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
-    // state.render.drawSquareNumbers();
+    state.render.drawSquareNumbers();
     if (state.controller.selectedSquare.isSelected) {
         state.render.highlightTile(state.controller.selectedSquare.square);
     }
+    state.render.drawPossibleMoves(state.controller);
     state.render.drawPieces(state.board);
 }
 
