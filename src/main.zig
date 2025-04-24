@@ -17,6 +17,10 @@ const PieceTypeLength = @typeInfo(PieceType).@"enum".fields.len;
 const PieceColor = enum {
     White,
     Black,
+
+    pub fn oposite(self: PieceColor) PieceColor {
+        return if (self == PieceColor.White) PieceColor.Black else PieceColor.White;
+    }
 };
 const PieceColorLength = @typeInfo(PieceColor).@"enum".fields.len;
 
@@ -44,10 +48,6 @@ const Piece = packed struct(u8) {
 
     pub fn getColor(self: *Piece) PieceColor {
         return @enumFromInt(self.color);
-    }
-
-    pub fn getOpositeColor(self: *Piece) PieceColor {
-        return if (self.getColor() == PieceColor.White) PieceColor.Black else PieceColor.White;
     }
 
     pub fn getPieceType(self: *Piece) PieceType {
@@ -571,7 +571,6 @@ const Controller = struct {
         }
 
         // Move forward
-
         const forwardPos = iv.IVector2Add(pos, IVector2.init(0, direction));
         if (!render.isPosValid(forwardPos)) {
             return;
@@ -638,6 +637,115 @@ const Controller = struct {
         }
     }
 
+    fn updateBishopMoves(self: *Controller, board: *Board, render: *Render) void {
+        var piece = board.getPiece(self.selectedSquare.square);
+        const pos = render.getPosFromSquare(self.selectedSquare.square);
+        const color = piece.getColor();
+
+        // Directions for bishop movement: top-right, top-left, bottom-right, bottom-left
+        const directions = [4]IVector2{
+            IVector2.init(1, 1),
+            IVector2.init(-1, 1),
+            IVector2.init(1, -1),
+            IVector2.init(-1, -1),
+        };
+
+        for (directions) |direction| {
+            var currentPos = pos;
+
+            while (true) {
+                currentPos = iv.IVector2Add(currentPos, direction);
+
+                if (!render.isPosValid(currentPos)) {
+                    break;
+                }
+
+                const targetSquare = render.getSquareFromPos(currentPos);
+                var targetPiece = board.getPiece(targetSquare);
+
+                if (!targetPiece.valid) {
+                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                } else {
+                    if (targetPiece.getColor() != color) {
+                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    }
+                    break; // Stop moving in this direction after encountering a piece
+                }
+            }
+        }
+    }
+
+    fn updateRookMoves(self: *Controller, board: *Board, render: *Render) void {
+        var piece = board.getPiece(self.selectedSquare.square);
+        const pos = render.getPosFromSquare(self.selectedSquare.square);
+        const color = piece.getColor();
+
+        // Directions for rook movement: up, down, left, right
+        const directions = [4]IVector2{
+            IVector2.init(0, 1), // Up
+            IVector2.init(0, -1), // Down
+            IVector2.init(1, 0), // Right
+            IVector2.init(-1, 0), // Left
+        };
+
+        for (directions) |direction| {
+            var currentPos = pos;
+
+            while (true) {
+                currentPos = iv.IVector2Add(currentPos, direction);
+
+                if (!render.isPosValid(currentPos)) {
+                    break;
+                }
+
+                const targetSquare = render.getSquareFromPos(currentPos);
+                var targetPiece = board.getPiece(targetSquare);
+
+                if (!targetPiece.valid) {
+                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                } else {
+                    if (targetPiece.getColor() != color) {
+                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    }
+                    break; // Stop moving in this direction after encountering a piece
+                }
+            }
+        }
+    }
+
+    fn updateKingMoves(self: *Controller, board: *Board, render: *Render) void {
+        var piece = board.getPiece(self.selectedSquare.square);
+        const pos = render.getPosFromSquare(self.selectedSquare.square);
+        const color = piece.getColor();
+
+        // Direction vectors for king moves.
+        const kingMoves = [8]IVector2{
+            IVector2.init(1, 0),
+            IVector2.init(1, 1),
+            IVector2.init(0, 1),
+            IVector2.init(-1, 1),
+            IVector2.init(-1, 0),
+            IVector2.init(-1, -1),
+            IVector2.init(0, -1),
+            IVector2.init(1, -1),
+        };
+
+        // Regular moves
+        for (kingMoves) |delta| {
+            const targetPos = iv.IVector2Add(pos, delta);
+            if (render.isPosValid(targetPos)) {
+                const targetSquare = render.getSquareFromPos(targetPos);
+                var targetPiece = board.getPiece(targetSquare);
+                if (!targetPiece.valid) {
+                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                } else if (targetPiece.getColor() != color) {
+                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                }
+            }
+        }
+        // Future improvement: add castling moves if applicable.
+    }
+
     fn updatePseudoLegalMoves(self: *Controller, board: *Board, render: *Render) void {
         // clear the pseudoLegalMoves
         self.pseudoLegalMoves.clear();
@@ -649,16 +757,31 @@ const Controller = struct {
                 return;
             }
 
+            if (piece.getColor() != board.pieceToMove) {
+                return;
+            }
+
             switch (piece.getPieceType()) {
                 PieceType.Pawn => self.updatePawnMoves(board, render),
                 PieceType.Knight => self.updateKnightMoves(board, render),
-                else => {},
+                PieceType.Bishop => self.updateBishopMoves(board, render),
+                PieceType.Rook => self.updateRookMoves(board, render),
+                PieceType.Queen => {
+                    self.updateBishopMoves(board, render);
+                    self.updateRookMoves(board, render);
+                },
+                PieceType.King => self.updateKingMoves(board, render),
             }
         }
     }
 
     fn makeMove(_: *Controller, board: *Board, move: Move) void {
         var piece = board.getPiece(move.from);
+
+        if (piece.getColor() != board.pieceToMove) {
+            return;
+        }
+
         if (piece.valid) {
             board.clearPiece(piece.getColor(), piece.getPieceType(), move.from);
             board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
@@ -684,10 +807,17 @@ const Controller = struct {
             board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
             board.setPiece(piece.getColor(), pieceType, move.to);
         }
+
+        board.pieceToMove = board.pieceToMove.oposite();
     }
 
     fn undoMove(_: *Controller, board: *Board, move: Move) void {
         var piece = board.getPiece(move.to);
+
+        if (piece.getColor() != board.pieceToMove.oposite()) {
+            return;
+        }
+
         if (piece.valid) {
             board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
             board.setPiece(piece.getColor(), piece.getPieceType(), move.from);
@@ -713,6 +843,8 @@ const Controller = struct {
             board.clearPiece(piece.getColor(), pieceType, move.from);
             board.setPiece(piece.getColor(), PieceType.Pawn, move.from);
         }
+
+        board.pieceToMove = board.pieceToMove.oposite();
     }
 
     fn updateSelectedSquare(self: *Controller, render: *Render, board: *Board) void {
