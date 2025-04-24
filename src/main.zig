@@ -61,7 +61,7 @@ const Board = struct {
     boards: [PieceColorLength][PieceTypeLength]Bitboard,
     pieceToMove: PieceColor,
     castlingRights: u8,
-    enPassantTarget: u8,
+    enPassantTarget: u6,
     halfMoveClock: u8,
     fullMoveNumber: u8,
 
@@ -140,11 +140,11 @@ const Board = struct {
         return board;
     }
 
-    pub fn parseSquare(square: []const u8) u8 {
+    pub fn parseSquare(square: []const u8) u6 {
         if (square.len != 2) @panic("Invalid square format");
         const file = square[0] - 'a';
         const rank = square[1] - '1';
-        return rank * 8 + file;
+        return @intCast(rank * 8 + file);
     }
 
     pub fn getPieceChar(self: *Board, square: u6) u8 {
@@ -559,6 +559,8 @@ const Controller = struct {
             }
             const targetSquare = render.getSquareFromPos(targetPos);
             var targetPiece = board.getPiece(targetSquare);
+
+            // Regular diagonal capture
             if (targetPiece.valid and targetPiece.getColor() != color) {
                 const finalFile: i32 = if (color == PieceColor.White) 7 else 0;
                 const isFinalPosition = (targetSquare / 8) == finalFile;
@@ -566,6 +568,16 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.QueenPromotionCapture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
                 } else {
                     self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                }
+            }
+
+            // En passant capture
+            if (targetSquare == board.enPassantTarget) {
+                if (self.lastMove) |lastMove| {
+                    var lastMovePiece = board.getPiece(lastMove.to);
+                    if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.code == MoveCode.DoublePawnPush) {
+                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.EnPassant, lastMovePiece)) catch std.debug.panic("Failed to append move", .{});
+                    }
                 }
             }
         }
@@ -787,9 +799,21 @@ const Controller = struct {
             board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
         }
 
-        if (move.code.isCapture()) {
+        if (move.code == MoveCode.DoublePawnPush) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            board.enPassantTarget = @intCast(move.to + direction * 8);
+        }
+
+        if (move.code.isCapture() and move.code != MoveCode.EnPassant) {
             var capturedPiece = move.capturedPiece;
             board.clearPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.code == MoveCode.EnPassant) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            const targetSquare: u6 = @intCast(move.to + direction * 8);
+            var targetPiece = move.capturedPiece;
+            board.clearPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
         }
 
         if (move.code.isPromotion()) {
@@ -823,9 +847,16 @@ const Controller = struct {
             board.setPiece(piece.getColor(), piece.getPieceType(), move.from);
         }
 
-        if (move.code.isCapture()) {
+        if (move.code.isCapture() and move.code != MoveCode.EnPassant) {
             var capturedPiece = move.capturedPiece;
             board.setPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.code == MoveCode.EnPassant) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            const targetSquare: u6 = @intCast(move.to + direction * 8);
+            var targetPiece = move.capturedPiece;
+            board.setPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
         }
 
         if (move.code.isPromotion()) {
