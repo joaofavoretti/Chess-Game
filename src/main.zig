@@ -209,35 +209,80 @@ const MoveCode = enum(u4) {
     }
 };
 
+const MoveProps = union(MoveCode) {
+    QuietMove: struct {},
+    DoublePawnPush: struct {},
+    KingCastle: struct {
+        lastCastlingRights: u8 = 0,
+    },
+    QueenCastle: struct {
+        lastCastlingRights: u8 = 0,
+    },
+    Capture: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+    EnPassant: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+    KnightPromotion: struct {},
+    BishopPromotion: struct {},
+    RookPromotion: struct {},
+    QueenPromotion: struct {},
+    KnightPromotionCapture: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+    BishopPromotionCapture: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+    RookPromotionCapture: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+    QueenPromotionCapture: struct {
+        capturedPiece: Piece = Piece.initInvalid(),
+    },
+};
+
 pub const Move = struct {
     from: u6,
     to: u6,
-    code: MoveCode,
-    capturedPiece: Piece = Piece.initInvalid(),
+    props: MoveProps,
 
-    pub fn init(from: u6, to: u6, code: MoveCode) Move {
+    pub fn init(from: u6, to: u6, props: MoveProps) Move {
         return Move{
             .from = from,
             .to = to,
-            .code = code,
+            .props = props,
         };
     }
 
-    pub fn initCapture(from: u6, to: u6, code: MoveCode, capturedPiece: Piece) Move {
-        return Move{
-            .from = from,
-            .to = to,
-            .code = code,
-            .capturedPiece = capturedPiece,
-        };
-    }
-
-    pub fn isValid(self: *Move) bool {
+    pub fn isValid(self: *const Move) bool {
         return self.from != self.to;
     }
-};
 
-const MoveGenerator = struct {};
+    pub fn getCode(self: *const Move) MoveCode {
+        return @as(MoveCode, self.props);
+    }
+
+    pub fn getCapturedPiece(self: *const Move) Piece {
+        return switch (self.getCode()) {
+            MoveCode.Capture => self.props.Capture.capturedPiece,
+            MoveCode.EnPassant => self.props.EnPassant.capturedPiece,
+            MoveCode.KnightPromotionCapture => self.props.KnightPromotionCapture.capturedPiece,
+            MoveCode.BishopPromotionCapture => self.props.BishopPromotionCapture.capturedPiece,
+            MoveCode.RookPromotionCapture => self.props.RookPromotionCapture.capturedPiece,
+            MoveCode.QueenPromotionCapture => self.props.QueenPromotionCapture.capturedPiece,
+            else => Piece.initInvalid(),
+        };
+    }
+
+    pub fn getLastCastlingRights(self: *const Move) u8 {
+        return switch (self.getCode()) {
+            MoveCode.KingCastle => self.props.KingCastle.lastCastlingRights,
+            MoveCode.QueenCastle => self.props.QueenCastle.lastCastlingRights,
+            else => 0,
+        };
+    }
+};
 
 const TEXTURE_ASSET_PATH = "./assets/pieces/default";
 const TEXTURE_DEFAULT_PATH = TEXTURE_ASSET_PATH ++ "/Default.png";
@@ -300,7 +345,7 @@ const Render = struct {
 
     fn isWhiteTile(self: *Render, square: u6) bool {
         const pos = self.getPosFromSquare(square);
-        return (@mod((pos.x + pos.y), 2) == 0);
+        return (@mod((pos.x + pos.y), 2) == 1);
     }
 
     pub fn isPosValid(_: *Render, pos: IVector2) bool {
@@ -404,7 +449,7 @@ const Render = struct {
                 @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
             );
 
-            if (move.code.isCapture()) {
+            if (move.getCode().isCapture()) {
                 const size = @as(f32, @floatFromInt(self.tileSize));
                 const rect = rl.Rectangle{
                     .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
@@ -544,6 +589,8 @@ const Controller = struct {
         };
     }
 
+    // TODO: Cant use position to check forward moves. Dont work on inverted board
+    // CRITICAL
     fn updatePawnMoves(self: *Controller, board: *Board, render: *Render) void {
         var piece = board.getPiece(self.selectedSquare.square);
         const pos = render.getPosFromSquare(self.selectedSquare.square);
@@ -565,9 +612,17 @@ const Controller = struct {
                 const finalFile: i32 = if (color == PieceColor.White) 7 else 0;
                 const isFinalPosition = (targetSquare / 8) == finalFile;
                 if (isFinalPosition) {
-                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.QueenPromotionCapture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .QueenPromotionCapture = .{ .capturedPiece = targetPiece } },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 } else {
-                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .Capture = .{ .capturedPiece = targetPiece } },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 }
             }
 
@@ -575,8 +630,12 @@ const Controller = struct {
             if (targetSquare == board.enPassantTarget) {
                 if (self.lastMove) |lastMove| {
                     var lastMovePiece = board.getPiece(lastMove.to);
-                    if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.code == MoveCode.DoublePawnPush) {
-                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.EnPassant, lastMovePiece)) catch std.debug.panic("Failed to append move", .{});
+                    if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.getCode() == MoveCode.DoublePawnPush) {
+                        self.pseudoLegalMoves.append(Move.init(
+                            self.selectedSquare.square,
+                            targetSquare,
+                            .{ .EnPassant = .{ .capturedPiece = lastMovePiece } },
+                        )) catch std.debug.panic("Failed to append move", .{});
                     }
                 }
             }
@@ -593,10 +652,18 @@ const Controller = struct {
             const finalFile: i32 = if (color == PieceColor.White) 7 else 0;
             const isFinalPosition = (forwardSquare / 8) == finalFile;
             if (isFinalPosition) {
-                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QueenPromotion)) catch std.debug.panic("Failed to append move", .{});
+                self.pseudoLegalMoves.append(Move.init(
+                    self.selectedSquare.square,
+                    forwardSquare,
+                    .{ .QueenPromotion = .{} },
+                )) catch std.debug.panic("Failed to append move", .{});
                 return;
             } else {
-                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                self.pseudoLegalMoves.append(Move.init(
+                    self.selectedSquare.square,
+                    forwardSquare,
+                    .{ .QuietMove = .{} },
+                )) catch std.debug.panic("Failed to append move", .{});
             }
 
             // Double pawn push
@@ -609,7 +676,11 @@ const Controller = struct {
             const initialFile: i32 = if (color == PieceColor.White) 1 else 6;
             const isInitialPosition = (self.selectedSquare.square / 8) == initialFile;
             if (!doubleForwardPiece.valid and isInitialPosition) {
-                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, doubleForwardSquare, MoveCode.DoublePawnPush)) catch std.debug.panic("Failed to append move", .{});
+                self.pseudoLegalMoves.append(Move.init(
+                    self.selectedSquare.square,
+                    doubleForwardSquare,
+                    .{ .DoublePawnPush = .{} },
+                )) catch std.debug.panic("Failed to append move", .{});
             }
         }
     }
@@ -639,11 +710,19 @@ const Controller = struct {
                 const targetSquare = render.getSquareFromPos(targetPos);
                 var targetPiece = board.getPiece(targetSquare);
                 if (!targetPiece.valid) {
-                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .QuietMove = .{} },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 }
 
                 if (targetPiece.valid and targetPiece.getColor() != color) {
-                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .Capture = .{ .capturedPiece = targetPiece } },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 }
             }
         }
@@ -676,10 +755,18 @@ const Controller = struct {
                 var targetPiece = board.getPiece(targetSquare);
 
                 if (!targetPiece.valid) {
-                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .QuietMove = .{} },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 } else {
                     if (targetPiece.getColor() != color) {
-                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                        self.pseudoLegalMoves.append(Move.init(
+                            self.selectedSquare.square,
+                            targetSquare,
+                            .{ .DoublePawnPush = .{} },
+                        )) catch std.debug.panic("Failed to append move", .{});
                     }
                     break; // Stop moving in this direction after encountering a piece
                 }
@@ -714,10 +801,14 @@ const Controller = struct {
                 var targetPiece = board.getPiece(targetSquare);
 
                 if (!targetPiece.valid) {
-                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, .{ .QuietMove = .{} })) catch std.debug.panic("Failed to append move", .{});
                 } else {
                     if (targetPiece.getColor() != color) {
-                        self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                        self.pseudoLegalMoves.append(Move.init(
+                            self.selectedSquare.square,
+                            targetSquare,
+                            .{ .Capture = .{ .capturedPiece = targetPiece } },
+                        )) catch std.debug.panic("Failed to append move", .{});
                     }
                     break; // Stop moving in this direction after encountering a piece
                 }
@@ -749,13 +840,62 @@ const Controller = struct {
                 const targetSquare = render.getSquareFromPos(targetPos);
                 var targetPiece = board.getPiece(targetSquare);
                 if (!targetPiece.valid) {
-                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .QuietMove = .{} },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 } else if (targetPiece.getColor() != color) {
-                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        .{ .Capture = .{ .capturedPiece = targetPiece } },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 }
             }
         }
-        // Future improvement: add castling moves if applicable.
+
+        // Castling moves
+
+        const castlingRights = if (color == PieceColor.White) (board.castlingRights & 0b0011) else (board.castlingRights & (0b1100 >> 2));
+
+        for (0..2) |i| { // 0 = King-side, 1 = Queen-side
+            if (castlingRights & (@as(u2, 1) << @intCast(i)) != 0) {
+                const kingSquare = self.selectedSquare.square;
+                const direction: i32 = if (i == 0) 1 else -1;
+                const rookSquareDelta: i32 = if (i == 0) 3 else -4;
+
+                var emptySquares = std.BoundedArray(u6, 3){};
+
+                var j: i32 = direction;
+                while (j < rookSquareDelta) {
+                    emptySquares.append(@intCast(kingSquare + j)) catch std.debug.panic("Failed to append square", .{});
+                    j += direction;
+                }
+
+                const squares = emptySquares.constSlice();
+                for (0..squares.len) |x| {
+                    const square = squares[x];
+                    if (board.getPiece(square).valid) {
+                        break;
+                    }
+                } else {
+                    if (i == 0) {
+                        self.pseudoLegalMoves.append(Move.init(
+                            kingSquare,
+                            @intCast(kingSquare + 2 * direction),
+                            .{ .KingCastle = .{ .lastCastlingRights = board.castlingRights } },
+                        )) catch std.debug.panic("Failed to append move", .{});
+                    } else {
+                        self.pseudoLegalMoves.append(Move.init(
+                            kingSquare,
+                            @intCast(kingSquare + 2 * direction),
+                            .{ .QueenCastle = .{ .lastCastlingRights = board.castlingRights } },
+                        )) catch std.debug.panic("Failed to append move", .{});
+                    }
+                }
+            }
+        }
     }
 
     fn updatePseudoLegalMoves(self: *Controller, board: *Board, render: *Render) void {
@@ -799,25 +939,30 @@ const Controller = struct {
             board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
         }
 
-        if (move.code == MoveCode.DoublePawnPush) {
+        // Disable castling rights if it is a king move
+        if (piece.getPieceType() == PieceType.King) {
+            board.castlingRights &= if (piece.getColor() == PieceColor.White) 0b1100 else 0b0011;
+        }
+
+        if (move.getCode() == MoveCode.DoublePawnPush) {
             const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
             board.enPassantTarget = @intCast(move.to + direction * 8);
         }
 
-        if (move.code.isCapture() and move.code != MoveCode.EnPassant) {
-            var capturedPiece = move.capturedPiece;
+        if (move.getCode().isCapture() and move.getCode() != MoveCode.EnPassant) {
+            var capturedPiece = move.getCapturedPiece();
             board.clearPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
         }
 
-        if (move.code == MoveCode.EnPassant) {
+        if (move.getCode() == MoveCode.EnPassant) {
             const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
             const targetSquare: u6 = @intCast(move.to + direction * 8);
-            var targetPiece = move.capturedPiece;
+            var targetPiece = move.getCapturedPiece();
             board.clearPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
         }
 
-        if (move.code.isPromotion()) {
-            const pieceType = switch (move.code) {
+        if (move.getCode().isPromotion()) {
+            const pieceType = switch (move.getCode()) {
                 MoveCode.KnightPromotion => PieceType.Knight,
                 MoveCode.BishopPromotion => PieceType.Bishop,
                 MoveCode.RookPromotion => PieceType.Rook,
@@ -830,6 +975,20 @@ const Controller = struct {
             };
             board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
             board.setPiece(piece.getColor(), pieceType, move.to);
+        }
+
+        if (move.getCode() == MoveCode.KingCastle) {
+            const direction: i32 = 1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 3);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, rookSquare);
+        } else if (move.getCode() == MoveCode.QueenCastle) {
+            const direction: i32 = -1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 4);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, rookSquare);
         }
 
         board.pieceToMove = board.pieceToMove.oposite();
@@ -847,20 +1006,20 @@ const Controller = struct {
             board.setPiece(piece.getColor(), piece.getPieceType(), move.from);
         }
 
-        if (move.code.isCapture() and move.code != MoveCode.EnPassant) {
-            var capturedPiece = move.capturedPiece;
+        if (move.getCode().isCapture() and move.getCode() != MoveCode.EnPassant) {
+            var capturedPiece = move.getCapturedPiece();
             board.setPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
         }
 
-        if (move.code == MoveCode.EnPassant) {
+        if (move.getCode() == MoveCode.EnPassant) {
             const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
             const targetSquare: u6 = @intCast(move.to + direction * 8);
-            var targetPiece = move.capturedPiece;
+            var targetPiece = move.getCapturedPiece();
             board.setPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
         }
 
-        if (move.code.isPromotion()) {
-            const pieceType = switch (move.code) {
+        if (move.getCode().isPromotion()) {
+            const pieceType = switch (move.getCode()) {
                 MoveCode.KnightPromotion => PieceType.Knight,
                 MoveCode.BishopPromotion => PieceType.Bishop,
                 MoveCode.RookPromotion => PieceType.Rook,
@@ -873,6 +1032,22 @@ const Controller = struct {
             };
             board.clearPiece(piece.getColor(), pieceType, move.from);
             board.setPiece(piece.getColor(), PieceType.Pawn, move.from);
+        }
+
+        if (move.getCode() == MoveCode.KingCastle) {
+            const direction: i32 = 1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 3);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.castlingRights = move.getLastCastlingRights();
+        } else if (move.getCode() == MoveCode.QueenCastle) {
+            const direction: i32 = -1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 4);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.castlingRights = move.getLastCastlingRights();
         }
 
         board.pieceToMove = board.pieceToMove.oposite();
@@ -958,6 +1133,7 @@ const GameState = struct {
 
         const board = std.heap.c_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = Board.initFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        board.* = Board.initFromFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
 
         const controller = std.heap.c_allocator.create(Controller) catch std.debug.panic("Failed to allocate Controller", .{});
         controller.* = Controller.init(render);
@@ -982,7 +1158,7 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    state.controller.makeMove(state.board, Move.init(8, 16, MoveCode.QuietMove));
+    // state.controller.makeMove(state.board, Move.init(8, 16, MoveCode.QuietMove));
 
     Render.print(state.board);
 }
