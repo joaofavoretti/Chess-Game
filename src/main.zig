@@ -1,9 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
-const ivec = @import("ivector.zig");
+const iv = @import("ivector.zig");
 
-const IVector2 = ivec.IVector2;
-const IVector2Eq = ivec.IVector2Eq;
+const IVector2 = iv.IVector2;
 
 const PieceType = enum {
     Pawn,
@@ -45,6 +44,10 @@ const Piece = packed struct(u8) {
 
     pub fn getColor(self: *Piece) PieceColor {
         return @enumFromInt(self.color);
+    }
+
+    pub fn getOpositeColor(self: *Piece) PieceColor {
+        return if (self.getColor() == PieceColor.White) PieceColor.Black else PieceColor.White;
     }
 
     pub fn getPieceType(self: *Piece) PieceType {
@@ -200,6 +203,10 @@ const MoveCode = enum(u4) {
     pub fn isCapture(self: MoveCode) bool {
         return (@intFromEnum(self) & 0b0100) != 0;
     }
+
+    pub fn isPromotion(self: MoveCode) bool {
+        return (@intFromEnum(self) & 0b1000) != 0;
+    }
 };
 
 pub const Move = struct {
@@ -294,6 +301,10 @@ const Render = struct {
     fn isWhiteTile(self: *Render, square: u6) bool {
         const pos = self.getPosFromSquare(square);
         return (@mod((pos.x + pos.y), 2) == 0);
+    }
+
+    pub fn isPosValid(_: *Render, pos: IVector2) bool {
+        return (pos.x >= 0 and pos.x < 8 and pos.y >= 0 and pos.y < 8);
     }
 
     pub fn getPosFromSquare(self: *Render, square: u6) IVector2 {
@@ -523,6 +534,9 @@ const Controller = struct {
     selectedSquare: SelectedSquare = SelectedSquare.init(),
     pseudoLegalMoves: std.BoundedArray(Move, 64) = .{},
 
+    timeSinceLastMove: f32 = 0.0,
+    lastMove: ?Move = null,
+
     pub fn init(baseRender: *Render) Controller {
         return Controller{
             .tileSize = baseRender.tileSize,
@@ -530,43 +544,101 @@ const Controller = struct {
         };
     }
 
-    fn updatePawnMoves(self: *Controller, board: *Board) void {
-        std.log.info("Updating pawn moves", .{});
+    fn updatePawnMoves(self: *Controller, board: *Board, render: *Render) void {
         var piece = board.getPiece(self.selectedSquare.square);
+        const pos = render.getPosFromSquare(self.selectedSquare.square);
         const color = piece.getColor();
         const direction: i32 = if (color == PieceColor.White) 1 else -1;
 
         // Capture diagonally
         for (0..2) |i| {
             const i_ = @as(i32, @intCast(i));
-            const targetSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 8 + (i_ * 2 - 1)));
+            const targetPos = iv.IVector2Add(pos, IVector2.init(i_ * 2 - 1, direction));
+            if (!render.isPosValid(targetPos)) {
+                continue;
+            }
+            const targetSquare = render.getSquareFromPos(targetPos);
             var targetPiece = board.getPiece(targetSquare);
             if (targetPiece.valid and targetPiece.getColor() != color) {
-                std.log.info("Capture move", .{});
-                self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                const finalFile: i32 = if (color == PieceColor.White) 7 else 0;
+                const isFinalPosition = (targetSquare / 8) == finalFile;
+                if (isFinalPosition) {
+                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.QueenPromotionCapture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                } else {
+                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                }
             }
         }
 
         // Move forward
-        const forwardSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 8));
+
+        const forwardPos = iv.IVector2Add(pos, IVector2.init(0, direction));
+        if (!render.isPosValid(forwardPos)) {
+            return;
+        }
+        const forwardSquare = render.getSquareFromPos(forwardPos);
         const forwardPiece = board.getPiece(forwardSquare);
         if (!forwardPiece.valid) {
-            std.log.info("Quiet move", .{});
-            self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+            const finalFile: i32 = if (color == PieceColor.White) 7 else 0;
+            const isFinalPosition = (forwardSquare / 8) == finalFile;
+            if (isFinalPosition) {
+                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QueenPromotion)) catch std.debug.panic("Failed to append move", .{});
+                return;
+            } else {
+                self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, forwardSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+            }
 
             // Double pawn push
-            const doubleForwardSquare = @as(u6, @intCast(self.selectedSquare.square + direction * 16));
+            const doubleForwardPos = iv.IVector2Add(forwardPos, IVector2.init(0, direction));
+            if (!render.isPosValid(doubleForwardPos)) {
+                return;
+            }
+            const doubleForwardSquare = render.getSquareFromPos(doubleForwardPos);
             const doubleForwardPiece = board.getPiece(doubleForwardSquare);
             const initialFile: i32 = if (color == PieceColor.White) 1 else 6;
             const isInitialPosition = (self.selectedSquare.square / 8) == initialFile;
             if (!doubleForwardPiece.valid and isInitialPosition) {
-                std.log.info("Double pawn push", .{});
                 self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, doubleForwardSquare, MoveCode.DoublePawnPush)) catch std.debug.panic("Failed to append move", .{});
             }
         }
     }
 
-    fn updatePseudoLegalMoves(self: *Controller, board: *Board) void {
+    fn updateKnightMoves(self: *Controller, board: *Board, render: *Render) void {
+        var piece = board.getPiece(self.selectedSquare.square);
+        const pos = render.getPosFromSquare(self.selectedSquare.square);
+        const color = piece.getColor();
+
+        // Knight moves
+        const knightMoves = [8]IVector2{
+            IVector2.init(1, 2),
+            IVector2.init(2, 1),
+            IVector2.init(2, -1),
+            IVector2.init(1, -2),
+            IVector2.init(-1, -2),
+            IVector2.init(-2, -1),
+            IVector2.init(-2, 1),
+            IVector2.init(-1, 2),
+        };
+
+        for (0..8) |i| {
+            const move = knightMoves[i];
+            const targetPos = iv.IVector2Add(pos, move);
+
+            if (render.isPosValid(targetPos)) {
+                const targetSquare = render.getSquareFromPos(targetPos);
+                var targetPiece = board.getPiece(targetSquare);
+                if (!targetPiece.valid) {
+                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, MoveCode.QuietMove)) catch std.debug.panic("Failed to append move", .{});
+                }
+
+                if (targetPiece.valid and targetPiece.getColor() != color) {
+                    self.pseudoLegalMoves.append(Move.initCapture(self.selectedSquare.square, targetSquare, MoveCode.Capture, targetPiece)) catch std.debug.panic("Failed to append move", .{});
+                }
+            }
+        }
+    }
+
+    fn updatePseudoLegalMoves(self: *Controller, board: *Board, render: *Render) void {
         // clear the pseudoLegalMoves
         self.pseudoLegalMoves.clear();
 
@@ -578,9 +650,68 @@ const Controller = struct {
             }
 
             switch (piece.getPieceType()) {
-                PieceType.Pawn => self.updatePawnMoves(board),
+                PieceType.Pawn => self.updatePawnMoves(board, render),
+                PieceType.Knight => self.updateKnightMoves(board, render),
                 else => {},
             }
+        }
+    }
+
+    fn makeMove(_: *Controller, board: *Board, move: Move) void {
+        var piece = board.getPiece(move.from);
+        if (piece.valid) {
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.from);
+            board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
+        }
+
+        if (move.code.isCapture()) {
+            var capturedPiece = move.capturedPiece;
+            board.clearPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.code.isPromotion()) {
+            const pieceType = switch (move.code) {
+                MoveCode.KnightPromotion => PieceType.Knight,
+                MoveCode.BishopPromotion => PieceType.Bishop,
+                MoveCode.RookPromotion => PieceType.Rook,
+                MoveCode.QueenPromotion => PieceType.Queen,
+                MoveCode.KnightPromotionCapture => PieceType.Knight,
+                MoveCode.BishopPromotionCapture => PieceType.Bishop,
+                MoveCode.RookPromotionCapture => PieceType.Rook,
+                MoveCode.QueenPromotionCapture => PieceType.Queen,
+                else => unreachable,
+            };
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
+            board.setPiece(piece.getColor(), pieceType, move.to);
+        }
+    }
+
+    fn undoMove(_: *Controller, board: *Board, move: Move) void {
+        var piece = board.getPiece(move.to);
+        if (piece.valid) {
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
+            board.setPiece(piece.getColor(), piece.getPieceType(), move.from);
+        }
+
+        if (move.code.isCapture()) {
+            var capturedPiece = move.capturedPiece;
+            board.setPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.code.isPromotion()) {
+            const pieceType = switch (move.code) {
+                MoveCode.KnightPromotion => PieceType.Knight,
+                MoveCode.BishopPromotion => PieceType.Bishop,
+                MoveCode.RookPromotion => PieceType.Rook,
+                MoveCode.QueenPromotion => PieceType.Queen,
+                MoveCode.KnightPromotionCapture => PieceType.Knight,
+                MoveCode.BishopPromotionCapture => PieceType.Bishop,
+                MoveCode.RookPromotionCapture => PieceType.Rook,
+                MoveCode.QueenPromotionCapture => PieceType.Queen,
+                else => unreachable,
+            };
+            board.clearPiece(piece.getColor(), pieceType, move.from);
+            board.setPiece(piece.getColor(), PieceType.Pawn, move.from);
         }
     }
 
@@ -590,23 +721,46 @@ const Controller = struct {
                 const pos = self.getMousePosition();
                 const square = render.getSquareFromPos(pos);
 
-                if (self.selectedSquare.isSelected and board.getPiece(self.selectedSquare.square).valid) {
-                    const from = self.selectedSquare.square;
-                    self.movePiece(board, from, square);
-                    self.selectedSquare.clear();
-                    self.pseudoLegalMoves.clear();
-                } else if (self.selectedSquare.isSelected and self.selectedSquare.square == square) {
-                    self.selectedSquare.clear();
-                    self.pseudoLegalMoves.clear();
+                if (self.selectedSquare.isSelected) {
+                    if (self.selectedSquare.square == square) {
+                        self.selectedSquare.clear();
+                        self.pseudoLegalMoves.clear();
+                    }
+
+                    const moves = self.pseudoLegalMoves.constSlice();
+                    for (0..moves.len) |i| {
+                        const move: Move = moves[i];
+                        if (move.to == square) {
+                            self.makeMove(board, move);
+                            self.selectedSquare.clear();
+                            self.pseudoLegalMoves.clear();
+
+                            self.lastMove = move;
+                            self.timeSinceLastMove = 0.0;
+
+                            return;
+                        }
+                    }
+                    self.selectedSquare.setSquare(square);
+                    self.updatePseudoLegalMoves(board, render);
                 } else {
                     self.selectedSquare.setSquare(square);
-                    self.updatePseudoLegalMoves(board);
+                    self.updatePseudoLegalMoves(board, render);
                 }
             }
         }
     }
 
-    pub fn update(self: *Controller, render: *Render, board: *Board) void {
+    pub fn update(self: *Controller, deltaTime: f32, render: *Render, board: *Board) void {
+        if (self.lastMove) |lastMove| {
+            self.timeSinceLastMove += deltaTime;
+            if (self.timeSinceLastMove >= 1.0) {
+                self.undoMove(board, lastMove);
+                self.lastMove = null;
+                self.timeSinceLastMove = 0.0;
+            }
+        }
+
         self.updateSelectedSquare(render, board);
     }
 
@@ -627,15 +781,6 @@ const Controller = struct {
         const x = @as(u6, @intCast(@divFloor(mousePos.x - self.offset.x, self.tileSize)));
         const y = @as(u6, @intCast(@divFloor(mousePos.y - self.offset.y, self.tileSize)));
         return IVector2.init(x, y);
-    }
-
-    pub fn movePiece(self: *Controller, board: *Board, from: u6, to: u6) void {
-        _ = self;
-        var piece = board.getPiece(from);
-        if (piece.valid) {
-            board.clearPiece(piece.getColor(), piece.getPieceType(), from);
-            board.setPiece(piece.getColor(), piece.getPieceType(), to);
-        }
     }
 };
 
@@ -674,7 +819,7 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    state.controller.movePiece(state.board, 8, 16);
+    state.controller.makeMove(state.board, Move.init(8, 16, MoveCode.QuietMove));
 
     Render.print(state.board);
 }
@@ -684,19 +829,17 @@ fn destroy() void {
 }
 
 fn update(deltaTime: f32) void {
-    _ = deltaTime;
-
     if (rl.isKeyPressed(rl.KeyboardKey.r)) {
         state.render.inverted = !state.render.inverted;
     }
 
-    state.controller.update(state.render, state.board);
+    state.controller.update(deltaTime, state.render, state.board);
 }
 
 fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
-    state.render.drawSquareNumbers();
+    // state.render.drawSquareNumbers();
     if (state.controller.selectedSquare.isSelected) {
         state.render.highlightTile(state.controller.selectedSquare.square);
     }
