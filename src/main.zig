@@ -46,11 +46,11 @@ const Piece = packed struct(u8) {
         };
     }
 
-    pub fn getColor(self: *Piece) PieceColor {
+    pub fn getColor(self: *const Piece) PieceColor {
         return @enumFromInt(self.color);
     }
 
-    pub fn getPieceType(self: *Piece) PieceType {
+    pub fn getPieceType(self: *const Piece) PieceType {
         return @enumFromInt(self.pieceType);
     }
 };
@@ -64,6 +64,7 @@ const Board = struct {
     enPassantTarget: u6,
     halfMoveClock: u8,
     fullMoveNumber: u8,
+    lastMoves: std.ArrayList(Move),
 
     fn setBitboard(self: *Board, color: PieceColor, piece: PieceType, bitboard: Bitboard) void {
         self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] = bitboard;
@@ -79,6 +80,10 @@ const Board = struct {
         const one: u64 = 1;
         const bitboard = one << square;
         self.setBitboard(color, piece, self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] & ~bitboard);
+    }
+
+    fn deinit(self: *Board) void {
+        self.lastMoves.deinit();
     }
 
     fn initFromFEN(fen: []const u8) Board {
@@ -97,6 +102,7 @@ const Board = struct {
             .enPassantTarget = if (enPassant[0] == '-') 0 else parseSquare(enPassant),
             .halfMoveClock = std.fmt.parseUnsigned(u8, halfMoveClock, 10) catch @panic("Invalid halfmove clock"),
             .fullMoveNumber = std.fmt.parseUnsigned(u8, fullMoveNumber, 10) catch @panic("Invalid fullmove number"),
+            .lastMoves = std.ArrayList(Move).init(std.heap.c_allocator),
         };
 
         // Parse piece placement
@@ -128,10 +134,10 @@ const Board = struct {
         // Parse castling rights
         for (castlingRights) |c| {
             switch (c) {
-                'K' => board.castlingRights |= 0b0001,
-                'Q' => board.castlingRights |= 0b0010,
-                'k' => board.castlingRights |= 0b0100,
-                'q' => board.castlingRights |= 0b1000,
+                'K' => board.castlingRights |= 0b0001, // White king side
+                'Q' => board.castlingRights |= 0b0010, // White queen side
+                'k' => board.castlingRights |= 0b0100, // Black king side
+                'q' => board.castlingRights |= 0b1000, // Black queen side
                 '-' => {},
                 else => @panic("Invalid castling rights"),
             }
@@ -212,12 +218,8 @@ const MoveCode = enum(u4) {
 const MoveProps = union(MoveCode) {
     QuietMove: struct {},
     DoublePawnPush: struct {},
-    KingCastle: struct {
-        lastCastlingRights: u8 = 0,
-    },
-    QueenCastle: struct {
-        lastCastlingRights: u8 = 0,
-    },
+    KingCastle: struct {},
+    QueenCastle: struct {},
     Capture: struct {
         capturedPiece: Piece = Piece.initInvalid(),
     },
@@ -243,15 +245,30 @@ const MoveProps = union(MoveCode) {
 };
 
 pub const Move = struct {
+    // Basic move data
     from: u6,
     to: u6,
+
+    // Move type
     props: MoveProps,
 
-    pub fn init(from: u6, to: u6, props: MoveProps) Move {
+    // Board state memory (I still dont know if I should)
+    pieceToMove: PieceColor,
+    castlingRights: u8,
+    enPassantTarget: u6,
+    halfMoveClock: u8,
+    fullMoveNumber: u8,
+
+    pub fn init(from: u6, to: u6, boardState: *Board, props: MoveProps) Move {
         return Move{
             .from = from,
             .to = to,
             .props = props,
+            .pieceToMove = boardState.pieceToMove,
+            .castlingRights = boardState.castlingRights,
+            .enPassantTarget = boardState.enPassantTarget,
+            .halfMoveClock = boardState.halfMoveClock,
+            .fullMoveNumber = boardState.fullMoveNumber,
         };
     }
 
@@ -579,9 +596,6 @@ const Controller = struct {
     selectedSquare: SelectedSquare = SelectedSquare.init(),
     pseudoLegalMoves: std.BoundedArray(Move, 64) = .{},
 
-    timeSinceLastMove: f32 = 0.0,
-    lastMove: ?Move = null,
-
     pub fn init(baseRender: *Render) Controller {
         return Controller{
             .tileSize = baseRender.tileSize,
@@ -615,12 +629,14 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .QueenPromotionCapture = .{ .capturedPiece = targetPiece } },
                     )) catch std.debug.panic("Failed to append move", .{});
                 } else {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .Capture = .{ .capturedPiece = targetPiece } },
                     )) catch std.debug.panic("Failed to append move", .{});
                 }
@@ -628,12 +644,13 @@ const Controller = struct {
 
             // En passant capture
             if (targetSquare == board.enPassantTarget) {
-                if (self.lastMove) |lastMove| {
+                if (board.lastMoves.getLastOrNull()) |lastMove| {
                     var lastMovePiece = board.getPiece(lastMove.to);
                     if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.getCode() == MoveCode.DoublePawnPush) {
                         self.pseudoLegalMoves.append(Move.init(
                             self.selectedSquare.square,
                             targetSquare,
+                            board,
                             .{ .EnPassant = .{ .capturedPiece = lastMovePiece } },
                         )) catch std.debug.panic("Failed to append move", .{});
                     }
@@ -655,6 +672,7 @@ const Controller = struct {
                 self.pseudoLegalMoves.append(Move.init(
                     self.selectedSquare.square,
                     forwardSquare,
+                    board,
                     .{ .QueenPromotion = .{} },
                 )) catch std.debug.panic("Failed to append move", .{});
                 return;
@@ -662,6 +680,7 @@ const Controller = struct {
                 self.pseudoLegalMoves.append(Move.init(
                     self.selectedSquare.square,
                     forwardSquare,
+                    board,
                     .{ .QuietMove = .{} },
                 )) catch std.debug.panic("Failed to append move", .{});
             }
@@ -679,6 +698,7 @@ const Controller = struct {
                 self.pseudoLegalMoves.append(Move.init(
                     self.selectedSquare.square,
                     doubleForwardSquare,
+                    board,
                     .{ .DoublePawnPush = .{} },
                 )) catch std.debug.panic("Failed to append move", .{});
             }
@@ -713,6 +733,7 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .QuietMove = .{} },
                     )) catch std.debug.panic("Failed to append move", .{});
                 }
@@ -721,6 +742,7 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .Capture = .{ .capturedPiece = targetPiece } },
                     )) catch std.debug.panic("Failed to append move", .{});
                 }
@@ -758,6 +780,7 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .QuietMove = .{} },
                     )) catch std.debug.panic("Failed to append move", .{});
                 } else {
@@ -765,6 +788,7 @@ const Controller = struct {
                         self.pseudoLegalMoves.append(Move.init(
                             self.selectedSquare.square,
                             targetSquare,
+                            board,
                             .{ .DoublePawnPush = .{} },
                         )) catch std.debug.panic("Failed to append move", .{});
                     }
@@ -801,12 +825,18 @@ const Controller = struct {
                 var targetPiece = board.getPiece(targetSquare);
 
                 if (!targetPiece.valid) {
-                    self.pseudoLegalMoves.append(Move.init(self.selectedSquare.square, targetSquare, .{ .QuietMove = .{} })) catch std.debug.panic("Failed to append move", .{});
+                    self.pseudoLegalMoves.append(Move.init(
+                        self.selectedSquare.square,
+                        targetSquare,
+                        board,
+                        .{ .QuietMove = .{} },
+                    )) catch std.debug.panic("Failed to append move", .{});
                 } else {
                     if (targetPiece.getColor() != color) {
                         self.pseudoLegalMoves.append(Move.init(
                             self.selectedSquare.square,
                             targetSquare,
+                            board,
                             .{ .Capture = .{ .capturedPiece = targetPiece } },
                         )) catch std.debug.panic("Failed to append move", .{});
                     }
@@ -843,12 +873,14 @@ const Controller = struct {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .QuietMove = .{} },
                     )) catch std.debug.panic("Failed to append move", .{});
                 } else if (targetPiece.getColor() != color) {
                     self.pseudoLegalMoves.append(Move.init(
                         self.selectedSquare.square,
                         targetSquare,
+                        board,
                         .{ .Capture = .{ .capturedPiece = targetPiece } },
                     )) catch std.debug.panic("Failed to append move", .{});
                 }
@@ -856,9 +888,7 @@ const Controller = struct {
         }
 
         // Castling moves
-
-        const castlingRights = if (color == PieceColor.White) (board.castlingRights & 0b0011) else (board.castlingRights & (0b1100 >> 2));
-
+        const castlingRights = if (color == PieceColor.White) (board.castlingRights & 0b0011) else ((board.castlingRights & 0b1100) >> 2);
         for (0..2) |i| { // 0 = King-side, 1 = Queen-side
             if (castlingRights & (@as(u2, 1) << @intCast(i)) != 0) {
                 const kingSquare = self.selectedSquare.square;
@@ -884,13 +914,15 @@ const Controller = struct {
                         self.pseudoLegalMoves.append(Move.init(
                             kingSquare,
                             @intCast(kingSquare + 2 * direction),
-                            .{ .KingCastle = .{ .lastCastlingRights = board.castlingRights } },
+                            board,
+                            .{ .KingCastle = .{} },
                         )) catch std.debug.panic("Failed to append move", .{});
                     } else {
                         self.pseudoLegalMoves.append(Move.init(
                             kingSquare,
                             @intCast(kingSquare + 2 * direction),
-                            .{ .QueenCastle = .{ .lastCastlingRights = board.castlingRights } },
+                            board,
+                            .{ .QueenCastle = .{} },
                         )) catch std.debug.panic("Failed to append move", .{});
                     }
                 }
@@ -934,6 +966,9 @@ const Controller = struct {
             return;
         }
 
+        board.fullMoveNumber += if (piece.getColor() == PieceColor.Black) 1 else 0;
+        board.halfMoveClock += if (piece.getColor() == PieceColor.White) 1 else 0;
+
         if (piece.valid) {
             board.clearPiece(piece.getColor(), piece.getPieceType(), move.from);
             board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
@@ -942,6 +977,55 @@ const Controller = struct {
         // Disable castling rights if it is a king move
         if (piece.getPieceType() == PieceType.King) {
             board.castlingRights &= if (piece.getColor() == PieceColor.White) 0b1100 else 0b0011;
+        }
+
+        // If the moved rook is one of the unused ones for castle, update the castling rights
+        if (piece.getPieceType() == PieceType.Rook) {
+            const shiftAmount: u2 = if (piece.getColor() == PieceColor.White) 0 else 2;
+            const castlingRightsMask = @as(u4, 0b0011) << shiftAmount;
+            const opositeCastlingRightsMask = @as(u4, 0b1111) ^ castlingRightsMask;
+            var castlingRights = (board.castlingRights & castlingRightsMask) >> shiftAmount;
+            if (castlingRights != 0) {
+                // The king wast moved
+                const kingSquare: u6 = if (piece.getColor() == PieceColor.White) 4 else 60;
+                const rookSquares = [2]u6{ kingSquare + 3, kingSquare - 4 };
+                for (0..2) |i| { // 0 = King-side, 1 = Queen-side
+                    const rookSquare = rookSquares[i];
+                    if (move.from == rookSquare) {
+                        // Update the castling rights to remove the side of the rook
+                        castlingRights &= @as(u4, 0b0001) << @intCast(1 - i);
+                        board.castlingRights &= (castlingRights << shiftAmount) | opositeCastlingRightsMask;
+                    }
+                }
+            }
+        }
+
+        if (move.getCode().isCapture() or piece.getPieceType() == PieceType.Pawn) {
+            board.halfMoveClock = 0;
+        }
+
+        // if the captured piece is a rook, I also need to update the castling rights
+        if (move.getCode().isCapture() and move.getCapturedPiece().getPieceType() == PieceType.Rook) {
+            std.log.info("Captured rook", .{});
+            const capturedRook = move.getCapturedPiece();
+            const shiftAmount: u2 = if (capturedRook.getColor() == PieceColor.White) 0 else 2;
+            const castlingRightsMask = @as(u4, 0b0011) << shiftAmount;
+            const opositeCastlingRightsMask = @as(u4, 0b1111) ^ castlingRightsMask;
+            var castlingRights = (board.castlingRights & castlingRightsMask) >> shiftAmount;
+            if (castlingRights != 0) {
+                // The king wast moved
+                const kingSquare: u6 = if (capturedRook.getColor() == PieceColor.White) 4 else 60;
+                const rookSquares = [2]u6{ kingSquare + 3, kingSquare - 4 };
+                for (0..2) |i| { // 0 = King-side, 1 = Queen-side
+                    const rookSquare = rookSquares[i];
+                    if (move.to == rookSquare) {
+                        std.log.info("Updating the castling rights according to the captured rook", .{});
+                        // Update the castling rights to remove the side of the rook
+                        castlingRights &= @as(u4, 0b0001) << @intCast(1 - i);
+                        board.castlingRights &= (castlingRights << shiftAmount) | opositeCastlingRightsMask;
+                    }
+                }
+            }
         }
 
         if (move.getCode() == MoveCode.DoublePawnPush) {
@@ -992,6 +1076,8 @@ const Controller = struct {
         }
 
         board.pieceToMove = board.pieceToMove.oposite();
+
+        board.lastMoves.append(move) catch std.debug.panic("Failed to append move to lastMoves stack", .{});
     }
 
     fn undoMove(_: *Controller, board: *Board, move: Move) void {
@@ -1040,17 +1126,18 @@ const Controller = struct {
             const rookSquare: u6 = @intCast(move.to - direction);
             board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
             board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
-            board.castlingRights = move.getLastCastlingRights();
         } else if (move.getCode() == MoveCode.QueenCastle) {
             const direction: i32 = -1;
             const originalRookSquare: u6 = @intCast(move.from + direction * 4);
             const rookSquare: u6 = @intCast(move.to - direction);
             board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
             board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
-            board.castlingRights = move.getLastCastlingRights();
         }
-
-        board.pieceToMove = board.pieceToMove.oposite();
+        board.pieceToMove = move.pieceToMove;
+        board.castlingRights = move.castlingRights;
+        board.enPassantTarget = move.enPassantTarget;
+        board.halfMoveClock = move.halfMoveClock;
+        board.fullMoveNumber = move.fullMoveNumber;
     }
 
     fn updateSelectedSquare(self: *Controller, render: *Render, board: *Board) void {
@@ -1073,9 +1160,6 @@ const Controller = struct {
                             self.selectedSquare.clear();
                             self.pseudoLegalMoves.clear();
 
-                            self.lastMove = move;
-                            self.timeSinceLastMove = 0.0;
-
                             return;
                         }
                     }
@@ -1090,16 +1174,18 @@ const Controller = struct {
     }
 
     pub fn update(self: *Controller, deltaTime: f32, render: *Render, board: *Board) void {
-        if (self.lastMove) |lastMove| {
-            self.timeSinceLastMove += deltaTime;
-            if (self.timeSinceLastMove >= 1.0) {
+        _ = deltaTime;
+
+        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
+            if (board.lastMoves.pop()) |lastMove| {
                 self.undoMove(board, lastMove);
-                self.lastMove = null;
-                self.timeSinceLastMove = 0.0;
             }
         }
 
         self.updateSelectedSquare(render, board);
+
+        // Print the binary representation of castlingRights
+        // std.log.info("Castling rights: {b:4}", .{board.castlingRights});
     }
 
     fn isMouseOverBoard(self: *Controller) bool {
@@ -1133,7 +1219,7 @@ const GameState = struct {
 
         const board = std.heap.c_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = Board.initFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-        board.* = Board.initFromFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        // board.* = Board.initFromFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
 
         const controller = std.heap.c_allocator.create(Controller) catch std.debug.panic("Failed to allocate Controller", .{});
         controller.* = Controller.init(render);
@@ -1147,6 +1233,7 @@ const GameState = struct {
 
     pub fn deinit(self: *GameState) void {
         self.render.deinit();
+        self.board.deinit();
         std.heap.c_allocator.destroy(self.render);
         std.heap.c_allocator.destroy(self.board);
         std.heap.c_allocator.destroy(self.controller);
