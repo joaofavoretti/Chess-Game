@@ -603,13 +603,13 @@ const Controller = struct {
         };
     }
 
-    // TODO: Cant use position to check forward moves. Dont work on inverted board
-    // CRITICAL
     fn updatePawnMoves(self: *Controller, board: *Board, render: *Render) void {
         var piece = board.getPiece(self.selectedSquare.square);
         const pos = render.getPosFromSquare(self.selectedSquare.square);
         const color = piece.getColor();
-        const direction: i32 = if (color == PieceColor.White) 1 else -1;
+        var direction: i32 = if (color == PieceColor.White) 1 else -1;
+
+        if (render.inverted) direction *= -1;
 
         // Capture diagonally
         for (0..2) |i| {
