@@ -890,7 +890,7 @@ const Controller = struct {
         // Castling moves
         const castlingRights = if (color == PieceColor.White) (board.castlingRights & 0b0011) else ((board.castlingRights & 0b1100) >> 2);
         for (0..2) |i| { // 0 = King-side, 1 = Queen-side
-            if (castlingRights & (@as(u2, 1) << @intCast(i)) != 0) {
+            if (castlingRights & (@as(u2, 0b01) << @intCast(i)) != 0) {
                 const kingSquare = self.selectedSquare.square;
                 const direction: i32 = if (i == 0) 1 else -1;
                 const rookSquareDelta: i32 = if (i == 0) 3 else -4;
@@ -898,7 +898,7 @@ const Controller = struct {
                 var emptySquares = std.BoundedArray(u6, 3){};
 
                 var j: i32 = direction;
-                while (j < rookSquareDelta) {
+                while (j * direction < rookSquareDelta * direction) {
                     emptySquares.append(@intCast(kingSquare + j)) catch std.debug.panic("Failed to append square", .{});
                     j += direction;
                 }
@@ -1206,6 +1206,43 @@ const Controller = struct {
         const y = @as(u6, @intCast(@divFloor(mousePos.y - self.offset.y, self.tileSize)));
         return IVector2.init(x, y);
     }
+
+    pub fn countPossibleMoves(self: *Controller, board: *Board, render: *Render, depth: u8) u64 {
+        if (depth == 0) {
+            return 1; // Base case: one possibility at depth 0
+        }
+
+        var count: u64 = 0;
+
+        for (0..64) |s| {
+            const square = @as(u6, @intCast(s));
+
+            // Dont need to verify if the square is valid,
+            //  because updatePseudoLegalMoves already does that
+            self.selectedSquare.setSquare(square);
+            self.updatePseudoLegalMoves(board, render);
+
+            const moves = self.pseudoLegalMoves.constSlice();
+            for (0..moves.len) |i| {
+                const move: Move = moves[i];
+
+                // Make the move
+                self.makeMove(board, move);
+
+                // std.debug.print("Move: {d} -> {d}\n", .{ move.from, move.to });
+                // Render.print(board);
+
+                // Recursively count moves at the next depth
+                count += self.countPossibleMoves(board, render, depth - 1);
+
+                if (board.lastMoves.pop()) |lastMove| {
+                    self.undoMove(board, lastMove);
+                }
+            }
+        }
+
+        return count;
+    }
 };
 
 const GameState = struct {
@@ -1245,9 +1282,18 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    // state.controller.makeMove(state.board, Move.init(8, 16, MoveCode.QuietMove));
+    std.log.info("Counting possible moves...", .{});
 
-    Render.print(state.board);
+    for (1..7) |i| {
+        var timer = std.time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
+        // std.log.info("CountPossibleMoves({d}) = {d}", .{ i, state.controller.countPossibleMoves(state.board, state.render, @intCast(i)) });
+        const possibleMoves = state.controller.countPossibleMoves(state.board, state.render, @intCast(i));
+        const elapsedTime = timer.read();
+        // std.log.info("Elapsed time: {} ms", .{elapsedTime / std.time.ns_per_ms});
+        std.log.info("CountPossibleMoves({d}) = {d} ({} ms)", .{ i, possibleMoves, elapsedTime / std.time.ns_per_ms });
+    }
+
+    // Render.print(state.board);
 }
 
 fn destroy() void {
@@ -1269,8 +1315,8 @@ fn draw() void {
     if (state.controller.selectedSquare.isSelected) {
         state.render.highlightTile(state.controller.selectedSquare.square);
     }
-    state.render.drawPossibleMoves(state.controller);
     state.render.drawPieces(state.board);
+    state.render.drawPossibleMoves(state.controller);
 }
 
 pub fn main() !void {
