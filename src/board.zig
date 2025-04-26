@@ -46,6 +46,16 @@ pub const Board = struct {
         self.lastMoves.deinit();
     }
 
+    pub fn getEmptySquares(self: *Board) Bitboard {
+        var emptySquares: Bitboard = 0;
+        inline for (0..PieceColorLength) |c| {
+            inline for (0..PieceTypeLength) |p| {
+                emptySquares |= self.boards[c][p];
+            }
+        }
+        return ~emptySquares;
+    }
+
     pub fn initFromFEN(fen: []const u8) Board {
         var tokenizer = std.mem.tokenizeAny(u8, fen, " ");
         const piecePlacement = tokenizer.next() orelse @panic("Invalid FEN: missing piece placement");

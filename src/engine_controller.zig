@@ -22,6 +22,9 @@ const EngineController = struct {
         self.pseudoLegalMoves.deinit();
     }
 
+    // TODO: Implement the parallel pawn push generation
+    // https://www.chessprogramming.org/General_Setwise_Operations
+    // //https://www.chessprogramming.org/Pawn_Pushes_(Bitboards)#GeneralizedPush
     fn generatePawnPseudoLegalMoves(self: *EngineController, colorToMove: PieceColor) void {
         _ = self;
         _ = colorToMove;
@@ -30,6 +33,10 @@ const EngineController = struct {
     pub fn generateMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearAndFree();
         const colorToMove = self.board.pieceToMove;
+
+        const emptySquares = self.board.getEmptySquares();
+
+        _ = emptySquares;
 
         self.generatePawnPseudoLegalMoves(colorToMove);
     }
