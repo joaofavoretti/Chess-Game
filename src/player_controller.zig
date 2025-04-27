@@ -388,7 +388,7 @@ pub const PlayerController = struct {
         }
     }
 
-    fn makeMove(_: *PlayerController, board: *Board, move: Move) void {
+    pub fn makeMove(_: *PlayerController, board: *Board, move: Move) void {
         var piece = board.getPiece(move.from);
 
         if (piece.getColor() != board.pieceToMove) {

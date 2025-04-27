@@ -14,6 +14,7 @@ const Piece = p.Piece;
 const IVector2 = iv.IVector2;
 const PlayerController = pc.PlayerController;
 const Board = b.Board;
+const Bitboard = b.Bitboard;
 const Move = m.Move;
 
 const TEXTURE_ASSET_PATH = "./assets/pieces/default";
@@ -197,6 +198,36 @@ pub const Render = struct {
         }
     }
 
+    pub fn drawPossibleMovesFromList(self: *Render, moves: *std.ArrayList(Move)) void {
+        const radius = @divTrunc(self.tileSize, 6);
+        const padding = @divTrunc(self.tileSize - radius * 2, 2);
+
+        for (0..moves.items.len) |i| {
+            const move: Move = moves.items[i];
+            const square = move.to;
+            const pos = self.getPosFromSquare(square);
+
+            const center = rl.Vector2.init(
+                @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize + padding + radius)),
+                @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
+            );
+
+            if (move.getCode().isCapture()) {
+                const size = @as(f32, @floatFromInt(self.tileSize));
+                const rect = rl.Rectangle{
+                    .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
+                    .y = @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)) + 6.0,
+                    .width = size - 12.0,
+                    .height = size - 12.0,
+                };
+
+                rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+            } else {
+                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+            }
+        }
+    }
+
     pub fn highlightTile(self: *Render, square: u6) void {
         const pos = self.getPosFromSquare(square);
 
@@ -278,6 +309,17 @@ pub const Render = struct {
                 } else {
                     std.debug.print(". ", .{});
                 }
+            }
+            std.debug.print("\n", .{});
+        }
+    }
+
+    pub fn printBitboard(bitboard: Bitboard) void {
+        for (0..8) |rank| {
+            for (0..8) |file| {
+                const square = @as(u6, @intCast(rank * 8 + file));
+                const piece = if ((bitboard & (@as(u64, 1) << square)) != 0) "1" else "0";
+                std.debug.print("{s} ", .{piece});
             }
             std.debug.print("\n", .{});
         }

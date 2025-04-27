@@ -39,6 +39,11 @@ var state: GameState = undefined;
 
 fn setup() void {
     state = GameState.init();
+
+    state.player.makeMove(state.board, Move.init(8, 24, state.board, .{ .DoublePawnPush = .{} }));
+    state.player.makeMove(state.board, Move.init(48, 40, state.board, .{ .QuietMove = .{} }));
+
+    state.engine.genMoves();
 }
 
 fn destroy() void {
@@ -50,18 +55,19 @@ fn update(deltaTime: f32) void {
         state.render.inverted = !state.render.inverted;
     }
 
-    state.controller.update(deltaTime, state.render, state.board);
+    state.player.update(deltaTime, state.render, state.board);
 }
 
 fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
     // state.render.drawSquareNumbers();
-    if (state.controller.selectedSquare.isSelected) {
-        state.render.highlightTile(state.controller.selectedSquare.square);
+    if (state.player.selectedSquare.isSelected) {
+        state.render.highlightTile(state.player.selectedSquare.square);
     }
     state.render.drawPieces(state.board);
-    state.render.drawPossibleMoves(state.controller);
+    state.render.drawPossibleMoves(state.player);
+    state.render.drawPossibleMovesFromList(&state.engine.pseudoLegalMoves);
 }
 
 pub fn main() !void {

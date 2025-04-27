@@ -2,15 +2,18 @@ const std = @import("std");
 const b = @import("board.zig");
 const r = @import("render.zig");
 const pc = @import("player_controller.zig");
+const ec = @import("engine_controller.zig");
 
 const Render = r.Render;
 const Board = b.Board;
 const PlayerController = pc.PlayerController;
+const EngineController = ec.EngineController;
 
 pub const GameState = struct {
     render: *Render,
     board: *Board,
-    controller: *PlayerController,
+    player: *PlayerController,
+    engine: *EngineController,
 
     pub fn init() GameState {
         const render = std.heap.c_allocator.create(Render) catch std.debug.panic("Failed to allocate Render", .{});
@@ -20,13 +23,17 @@ pub const GameState = struct {
         board.* = Board.initFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         // board.* = Board.initFromFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
 
-        const controller = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
-        controller.* = PlayerController.init(render);
+        const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
+        player.* = PlayerController.init(render);
+
+        const engine = std.heap.c_allocator.create(EngineController) catch std.debug.panic("Failed to allocate EngineController", .{});
+        engine.* = EngineController.init(board);
 
         return GameState{
             .render = render,
             .board = board,
-            .controller = controller,
+            .player = player,
+            .engine = engine,
         };
     }
 
@@ -35,6 +42,7 @@ pub const GameState = struct {
         self.board.deinit();
         std.heap.c_allocator.destroy(self.render);
         std.heap.c_allocator.destroy(self.board);
-        std.heap.c_allocator.destroy(self.controller);
+        std.heap.c_allocator.destroy(self.player);
+        std.heap.c_allocator.destroy(self.engine);
     }
 };
