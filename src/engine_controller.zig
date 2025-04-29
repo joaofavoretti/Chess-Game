@@ -13,6 +13,7 @@ const Bitboard = b.Bitboard;
 
 pub const EngineController = struct {
     board: *Board,
+    timeSinceLastMove: f32 = 0,
     pseudoLegalMoves: std.ArrayList(Move),
 
     pub fn init(board: *Board) EngineController {
@@ -124,8 +125,29 @@ pub const EngineController = struct {
     }
 
     pub fn genMoves(self: *EngineController) void {
-        self.pseudoLegalMoves.clearAndFree();
+        self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
         self.genPawnPushes(colorToMove);
+    }
+
+    pub fn makeRandomMove(self: *EngineController) void {
+        if (self.pseudoLegalMoves.items.len == 0) {
+            return;
+        }
+
+        var rng = std.Random.DefaultPrng.init(@as(u64, @intCast(std.time.timestamp())));
+        var random = rng.random();
+        const randomIndex = random.uintLessThan(usize, self.pseudoLegalMoves.items.len);
+        const move = self.pseudoLegalMoves.items[randomIndex];
+        self.board.makeMove(move);
+    }
+
+    pub fn update(self: *EngineController, deltaTime: f32) void {
+        if (self.timeSinceLastMove >= 1.0) {
+            self.timeSinceLastMove = 0;
+            self.makeRandomMove();
+            self.genMoves();
+        }
+        self.timeSinceLastMove += deltaTime;
     }
 };

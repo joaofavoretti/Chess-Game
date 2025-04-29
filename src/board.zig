@@ -16,6 +16,7 @@ const PieceType = pi.PieceType;
 const PieceColor = pi.PieceColor;
 const Piece = pi.Piece;
 const Move = m.Move;
+const MoveCode = m.MoveCode;
 
 pub const Bitboard = u64;
 
@@ -191,5 +192,186 @@ pub const Board = struct {
             }
         }
         return Piece.initInvalid();
+    }
+
+    pub fn makeMove(board: *Board, move: Move) void {
+        var piece = board.getPiece(move.from);
+
+        if (piece.getColor() != board.pieceToMove) {
+            return;
+        }
+
+        board.fullMoveNumber += if (piece.getColor() == PieceColor.Black) 1 else 0;
+        board.halfMoveClock += if (piece.getColor() == PieceColor.White) 1 else 0;
+
+        if (piece.valid) {
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.from);
+            board.setPiece(piece.getColor(), piece.getPieceType(), move.to);
+        }
+
+        // Disable castling rights if it is a king move
+        if (piece.getPieceType() == PieceType.King) {
+            board.castlingRights &= if (piece.getColor() == PieceColor.White) 0b1100 else 0b0011;
+        }
+
+        // If the moved rook is one of the unused ones for castle, update the castling rights
+        if (piece.getPieceType() == PieceType.Rook) {
+            const shiftAmount: u2 = if (piece.getColor() == PieceColor.White) 0 else 2;
+            const castlingRightsMask = @as(u4, 0b0011) << shiftAmount;
+            const opositeCastlingRightsMask = @as(u4, 0b1111) ^ castlingRightsMask;
+            var castlingRights = (board.castlingRights & castlingRightsMask) >> shiftAmount;
+            if (castlingRights != 0) {
+                // The king wast moved
+                const kingSquare: u6 = if (piece.getColor() == PieceColor.White) 4 else 60;
+                const rookSquares = [2]u6{ kingSquare + 3, kingSquare - 4 };
+                for (0..2) |i| { // 0 = King-side, 1 = Queen-side
+                    const rookSquare = rookSquares[i];
+                    if (move.from == rookSquare) {
+                        // Update the castling rights to remove the side of the rook
+                        castlingRights &= @as(u4, 0b0001) << @intCast(1 - i);
+                        board.castlingRights &= (castlingRights << shiftAmount) | opositeCastlingRightsMask;
+                    }
+                }
+            }
+        }
+
+        if (move.getCode().isCapture() or piece.getPieceType() == PieceType.Pawn) {
+            board.halfMoveClock = 0;
+        }
+
+        // if the captured piece is a rook, I also need to update the castling rights
+        if (move.getCode().isCapture() and move.getCapturedPiece().getPieceType() == PieceType.Rook) {
+            std.log.info("Captured rook", .{});
+            const capturedRook = move.getCapturedPiece();
+            const shiftAmount: u2 = if (capturedRook.getColor() == PieceColor.White) 0 else 2;
+            const castlingRightsMask = @as(u4, 0b0011) << shiftAmount;
+            const opositeCastlingRightsMask = @as(u4, 0b1111) ^ castlingRightsMask;
+            var castlingRights = (board.castlingRights & castlingRightsMask) >> shiftAmount;
+            if (castlingRights != 0) {
+                // The king wast moved
+                const kingSquare: u6 = if (capturedRook.getColor() == PieceColor.White) 4 else 60;
+                const rookSquares = [2]u6{ kingSquare + 3, kingSquare - 4 };
+                for (0..2) |i| { // 0 = King-side, 1 = Queen-side
+                    const rookSquare = rookSquares[i];
+                    if (move.to == rookSquare) {
+                        std.log.info("Updating the castling rights according to the captured rook", .{});
+                        // Update the castling rights to remove the side of the rook
+                        castlingRights &= @as(u4, 0b0001) << @intCast(1 - i);
+                        board.castlingRights &= (castlingRights << shiftAmount) | opositeCastlingRightsMask;
+                    }
+                }
+            }
+        }
+
+        if (move.getCode() == MoveCode.DoublePawnPush) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            board.enPassantTarget = @intCast(move.to + direction * 8);
+        }
+
+        if (move.getCode().isCapture() and move.getCode() != MoveCode.EnPassant) {
+            var capturedPiece = move.getCapturedPiece();
+            board.clearPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.getCode() == MoveCode.EnPassant) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            const targetSquare: u6 = @intCast(move.to + direction * 8);
+            var targetPiece = move.getCapturedPiece();
+            board.clearPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
+        }
+
+        if (move.getCode().isPromotion()) {
+            const pieceType = switch (move.getCode()) {
+                MoveCode.KnightPromotion => PieceType.Knight,
+                MoveCode.BishopPromotion => PieceType.Bishop,
+                MoveCode.RookPromotion => PieceType.Rook,
+                MoveCode.QueenPromotion => PieceType.Queen,
+                MoveCode.KnightPromotionCapture => PieceType.Knight,
+                MoveCode.BishopPromotionCapture => PieceType.Bishop,
+                MoveCode.RookPromotionCapture => PieceType.Rook,
+                MoveCode.QueenPromotionCapture => PieceType.Queen,
+                else => unreachable,
+            };
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
+            board.setPiece(piece.getColor(), pieceType, move.to);
+        }
+
+        if (move.getCode() == MoveCode.KingCastle) {
+            const direction: i32 = 1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 3);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, rookSquare);
+        } else if (move.getCode() == MoveCode.QueenCastle) {
+            const direction: i32 = -1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 4);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, rookSquare);
+        }
+
+        board.pieceToMove = board.pieceToMove.oposite();
+
+        board.lastMoves.append(move) catch std.debug.panic("Failed to append move to lastMoves stack", .{});
+    }
+
+    pub fn undoMove(board: *Board, move: Move) void {
+        var piece = board.getPiece(move.to);
+
+        if (piece.getColor() != board.pieceToMove.oposite()) {
+            return;
+        }
+
+        if (piece.valid) {
+            board.clearPiece(piece.getColor(), piece.getPieceType(), move.to);
+            board.setPiece(piece.getColor(), piece.getPieceType(), move.from);
+        }
+
+        if (move.getCode().isCapture() and move.getCode() != MoveCode.EnPassant) {
+            var capturedPiece = move.getCapturedPiece();
+            board.setPiece(capturedPiece.getColor(), capturedPiece.getPieceType(), move.to);
+        }
+
+        if (move.getCode() == MoveCode.EnPassant) {
+            const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
+            const targetSquare: u6 = @intCast(move.to + direction * 8);
+            var targetPiece = move.getCapturedPiece();
+            board.setPiece(targetPiece.getColor(), targetPiece.getPieceType(), targetSquare);
+        }
+
+        if (move.getCode().isPromotion()) {
+            const pieceType = switch (move.getCode()) {
+                MoveCode.KnightPromotion => PieceType.Knight,
+                MoveCode.BishopPromotion => PieceType.Bishop,
+                MoveCode.RookPromotion => PieceType.Rook,
+                MoveCode.QueenPromotion => PieceType.Queen,
+                MoveCode.KnightPromotionCapture => PieceType.Knight,
+                MoveCode.BishopPromotionCapture => PieceType.Bishop,
+                MoveCode.RookPromotionCapture => PieceType.Rook,
+                MoveCode.QueenPromotionCapture => PieceType.Queen,
+                else => unreachable,
+            };
+            board.clearPiece(piece.getColor(), pieceType, move.from);
+            board.setPiece(piece.getColor(), PieceType.Pawn, move.from);
+        }
+
+        if (move.getCode() == MoveCode.KingCastle) {
+            const direction: i32 = 1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 3);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+        } else if (move.getCode() == MoveCode.QueenCastle) {
+            const direction: i32 = -1;
+            const originalRookSquare: u6 = @intCast(move.from + direction * 4);
+            const rookSquare: u6 = @intCast(move.to - direction);
+            board.clearPiece(piece.getColor(), PieceType.Rook, rookSquare);
+            board.setPiece(piece.getColor(), PieceType.Rook, originalRookSquare);
+        }
+        board.pieceToMove = move.pieceToMove;
+        board.castlingRights = move.castlingRights;
+        board.enPassantTarget = move.enPassantTarget;
+        board.halfMoveClock = move.halfMoveClock;
+        board.fullMoveNumber = move.fullMoveNumber;
     }
 };
