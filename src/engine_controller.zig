@@ -3,6 +3,7 @@ const p = @import("piece.zig");
 const b = @import("board.zig");
 const r = @import("render.zig");
 const m = @import("move.zig");
+const pawnPushUtils = @import("engine_utils/pawn_push.zig");
 
 const Board = b.Board;
 const Render = r.Render;
@@ -27,46 +28,6 @@ pub const EngineController = struct {
         self.pseudoLegalMoves.deinit();
     }
 
-    fn whitePawnSinglePushTarget(whitePawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        return Board.shiftNorth(whitePawns) & emptySquares;
-    }
-
-    fn blackPawnSinglePushTarget(blackPawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        return Board.shiftSouth(blackPawns) & emptySquares;
-    }
-
-    fn whitePawnDoublePushTarget(whitePawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        const rank4: Bitboard = 0x00000000FF000000;
-        const singlePushTarget = EngineController.whitePawnSinglePushTarget(whitePawns, emptySquares);
-        return Board.shiftNorth(singlePushTarget) & emptySquares & rank4;
-    }
-
-    fn blackPawnDoublePushTarget(blackPawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        const rank5: Bitboard = 0x000000FF00000000;
-        const singlePushTarget = EngineController.blackPawnSinglePushTarget(blackPawns, emptySquares);
-        return Board.shiftSouth(singlePushTarget) & emptySquares & rank5;
-    }
-
-    fn whitePawnAble2Push(whitePawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        return Board.shiftSouth(emptySquares) & whitePawns;
-    }
-
-    fn blackPawnAble2Push(blackPawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        return Board.shiftNorth(emptySquares) & blackPawns;
-    }
-
-    fn whitePawnAble2DblPush(whitePawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        const rank4: Bitboard = 0x00000000FF000000;
-        const emptyRank3: Bitboard = Board.shiftSouth(emptySquares & rank4) & emptySquares;
-        return EngineController.whitePawnAble2Push(whitePawns, emptyRank3);
-    }
-
-    fn blackPawnAble2DblPush(blackPawns: Bitboard, emptySquares: Bitboard) Bitboard {
-        const rank5: Bitboard = 0x000000FF00000000;
-        const emptyRank4: Bitboard = Board.shiftNorth(emptySquares & rank5) & emptySquares;
-        return EngineController.blackPawnAble2Push(blackPawns, emptyRank4);
-    }
-
     // TODO: Implement the parallel pawn push generation
     // https://www.chessprogramming.org/General_Setwise_Operations
     // https://www.chessprogramming.org/Pawn_Pushes_(Bitboards)#GeneralizedPush
@@ -76,33 +37,49 @@ pub const EngineController = struct {
         const pawnBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Pawn)];
 
         var singlePushTarget: Bitboard = switch (colorToMove) {
-            PieceColor.White => EngineController.whitePawnSinglePushTarget(pawnBitboard, emptySquares),
-            PieceColor.Black => EngineController.blackPawnSinglePushTarget(pawnBitboard, emptySquares),
+            PieceColor.White => pawnPushUtils.whitePawnSinglePushTarget(pawnBitboard, emptySquares),
+            PieceColor.Black => pawnPushUtils.blackPawnSinglePushTarget(pawnBitboard, emptySquares),
         };
         var doublePushTarget: Bitboard = switch (colorToMove) {
-            PieceColor.White => EngineController.whitePawnDoublePushTarget(pawnBitboard, emptySquares),
-            PieceColor.Black => EngineController.blackPawnDoublePushTarget(pawnBitboard, emptySquares),
+            PieceColor.White => pawnPushUtils.whitePawnDoublePushTarget(pawnBitboard, emptySquares),
+            PieceColor.Black => pawnPushUtils.blackPawnDoublePushTarget(pawnBitboard, emptySquares),
         };
 
         var pawnAble2Push: Bitboard = switch (colorToMove) {
-            PieceColor.White => EngineController.whitePawnAble2Push(pawnBitboard, emptySquares),
-            PieceColor.Black => EngineController.blackPawnAble2Push(pawnBitboard, emptySquares),
+            PieceColor.White => pawnPushUtils.whitePawnAble2Push(pawnBitboard, emptySquares),
+            PieceColor.Black => pawnPushUtils.blackPawnAble2Push(pawnBitboard, emptySquares),
         };
         var pawnAble2DblPush: Bitboard = switch (colorToMove) {
-            PieceColor.White => EngineController.whitePawnAble2DblPush(pawnBitboard, emptySquares),
-            PieceColor.Black => EngineController.blackPawnAble2DblPush(pawnBitboard, emptySquares),
+            PieceColor.White => pawnPushUtils.whitePawnAble2DblPush(pawnBitboard, emptySquares),
+            PieceColor.Black => pawnPushUtils.blackPawnAble2DblPush(pawnBitboard, emptySquares),
         };
 
         // Generate quiet single push pawn moves
         while (singlePushTarget != 0 and pawnAble2Push != 0) {
             const originSquare: u6 = @intCast(@ctz(pawnAble2Push));
             const targetSquare: u6 = @intCast(@ctz(singlePushTarget));
+
+            // Verify if the target square is a promotion square
+            //  using bitwise operations
+            // const isWhitePromotionSquare = (targetSquare & 0b111000) == 0b111000;
+            // const isBlackPromotionSquare = (targetSquare ^ 0b111000) & 0b111000 == 0b111000;
+
             const move = Move.init(
                 originSquare,
                 targetSquare,
                 self.board,
                 .{ .QuietMove = .{} },
             );
+
+            // if (isWhitePromotionSquare or isBlackPromotionSquare) {
+            //     move = Move.init(
+            //         originSquare,
+            //         targetSquare,
+            //         self.board,
+            //         .{ .QueenPromotion = .{} },
+            //     );
+            // }
+
             self.pseudoLegalMoves.append(move) catch unreachable;
             singlePushTarget &= ~(@as(u64, 1) << targetSquare);
             pawnAble2Push &= ~(@as(u64, 1) << originSquare);
@@ -116,7 +93,7 @@ pub const EngineController = struct {
                 originSquare,
                 targetSquare,
                 self.board,
-                .{ .QuietMove = .{} },
+                .{ .DoublePawnPush = .{} },
             );
             self.pseudoLegalMoves.append(move) catch unreachable;
             doublePushTarget &= ~(@as(u64, 1) << targetSquare);
@@ -124,10 +101,28 @@ pub const EngineController = struct {
         }
     }
 
+    fn genPawnAttacks(self: *EngineController, colorToMove: PieceColor) void {
+        const pawnBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Pawn)];
+
+        const pawnEastAttacks: Bitboard = switch (colorToMove) {
+            PieceColor.White => Board.shiftEast(Board.shiftNorth(pawnBitboard)),
+            PieceColor.Black => Board.shiftEast(Board.shiftSouth(pawnBitboard)),
+        };
+
+        const pawnWestAttacks: Bitboard = switch (colorToMove) {
+            PieceColor.White => Board.shiftWest(Board.shiftNorth(pawnBitboard)),
+            PieceColor.Black => Board.shiftWest(Board.shiftSouth(pawnBitboard)),
+        };
+
+        _ = pawnEastAttacks;
+        _ = pawnWestAttacks;
+    }
+
     pub fn genMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
         self.genPawnPushes(colorToMove);
+        self.genPawnAttacks(colorToMove);
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
@@ -140,10 +135,12 @@ pub const EngineController = struct {
         const randomIndex = random.uintLessThan(usize, self.pseudoLegalMoves.items.len);
         const move = self.pseudoLegalMoves.items[randomIndex];
         self.board.makeMove(move);
+
+        self.board.pieceToMove = PieceColor.White;
     }
 
     pub fn update(self: *EngineController, deltaTime: f32) void {
-        if (self.timeSinceLastMove >= 1.0) {
+        if (self.timeSinceLastMove >= 0.3) {
             self.timeSinceLastMove = 0;
             self.makeRandomMove();
             self.genMoves();
