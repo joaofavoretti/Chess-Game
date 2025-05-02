@@ -1,9 +1,11 @@
 const std = @import("std");
+const rl = @import("raylib");
 const p = @import("piece.zig");
 const b = @import("board.zig");
 const r = @import("render.zig");
 const m = @import("move.zig");
 const pawnPushUtils = @import("engine_utils/pawn_push.zig");
+const pawnAttackUtils = @import("engine_utils/pawn_attack.zig");
 
 const Board = b.Board;
 const Render = r.Render;
@@ -26,6 +28,11 @@ pub const EngineController = struct {
 
     pub fn deinit(self: *EngineController) void {
         self.pseudoLegalMoves.deinit();
+    }
+
+    fn isWhiteOrBlackPromotionSquare(targetSquare: u6) bool {
+        return (targetSquare & 0b111000) == 0b111000 or
+            (targetSquare ^ 0b111000) & 0b111000 == 0b111000;
     }
 
     // TODO: Implement the parallel pawn push generation
@@ -59,26 +66,21 @@ pub const EngineController = struct {
             const originSquare: u6 = @intCast(@ctz(pawnAble2Push));
             const targetSquare: u6 = @intCast(@ctz(singlePushTarget));
 
-            // Verify if the target square is a promotion square
-            //  using bitwise operations
-            // const isWhitePromotionSquare = (targetSquare & 0b111000) == 0b111000;
-            // const isBlackPromotionSquare = (targetSquare ^ 0b111000) & 0b111000 == 0b111000;
-
-            const move = Move.init(
+            var move = Move.init(
                 originSquare,
                 targetSquare,
                 self.board,
                 .{ .QuietMove = .{} },
             );
 
-            // if (isWhitePromotionSquare or isBlackPromotionSquare) {
-            //     move = Move.init(
-            //         originSquare,
-            //         targetSquare,
-            //         self.board,
-            //         .{ .QueenPromotion = .{} },
-            //     );
-            // }
+            if (EngineController.isWhiteOrBlackPromotionSquare(targetSquare)) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QueenPromotion = .{} },
+                );
+            }
 
             self.pseudoLegalMoves.append(move) catch unreachable;
             singlePushTarget &= ~(@as(u64, 1) << targetSquare);
@@ -105,17 +107,87 @@ pub const EngineController = struct {
         const pawnBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Pawn)];
 
         const pawnEastAttacks: Bitboard = switch (colorToMove) {
-            PieceColor.White => Board.shiftEast(Board.shiftNorth(pawnBitboard)),
-            PieceColor.Black => Board.shiftEast(Board.shiftSouth(pawnBitboard)),
+            PieceColor.White => pawnAttackUtils.whitePawnEastAttack(pawnBitboard),
+            PieceColor.Black => pawnAttackUtils.blackPawnEastAttack(pawnBitboard),
         };
 
         const pawnWestAttacks: Bitboard = switch (colorToMove) {
-            PieceColor.White => Board.shiftWest(Board.shiftNorth(pawnBitboard)),
-            PieceColor.Black => Board.shiftWest(Board.shiftSouth(pawnBitboard)),
+            PieceColor.White => pawnAttackUtils.whitePawnWestAttack(pawnBitboard),
+            PieceColor.Black => pawnAttackUtils.blackPawnWestAttack(pawnBitboard),
         };
 
-        _ = pawnEastAttacks;
-        _ = pawnWestAttacks;
+        var oppositePawnBitboard = self.board.getColorBitboard(colorToMove.opposite());
+        oppositePawnBitboard |= self.board.enPassantTarget;
+
+        var pawnEastAttackTarget = pawnEastAttacks & oppositePawnBitboard;
+        var pawnEastAble2Capture = switch (colorToMove) {
+            PieceColor.White => pawnAttackUtils.whitePawnAble2CaptureEast(pawnEastAttackTarget),
+            PieceColor.Black => pawnAttackUtils.blackPawnAble2CaptureEast(pawnEastAttackTarget),
+        };
+
+        while (pawnEastAttackTarget != 0 and pawnEastAble2Capture != 0) {
+            const originSquare: u6 = @intCast(@ctz(pawnEastAble2Capture));
+            const targetSquare: u6 = @intCast(@ctz(pawnEastAttackTarget));
+
+            var move = Move.init(
+                originSquare,
+                targetSquare,
+                self.board,
+                .{ .Capture = .{
+                    .capturedPiece = self.board.getPiece(targetSquare),
+                } },
+            );
+
+            if (EngineController.isWhiteOrBlackPromotionSquare(targetSquare)) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QueenPromotionCapture = .{
+                        .capturedPiece = self.board.getPiece(targetSquare),
+                    } },
+                );
+            }
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+            pawnEastAttackTarget &= ~(@as(u64, 1) << targetSquare);
+            pawnEastAble2Capture &= ~(@as(u64, 1) << originSquare);
+        }
+
+        var pawnWestAttackTarget = pawnWestAttacks & oppositePawnBitboard;
+        var pawnWestAble2Capture = switch (colorToMove) {
+            PieceColor.White => pawnAttackUtils.whitePawnAble2CaptureWest(pawnWestAttackTarget),
+            PieceColor.Black => pawnAttackUtils.blackPawnAble2CaptureWest(pawnWestAttackTarget),
+        };
+
+        while (pawnWestAttackTarget != 0 and pawnWestAble2Capture != 0) {
+            const originSquare: u6 = @intCast(@ctz(pawnWestAble2Capture));
+            const targetSquare: u6 = @intCast(@ctz(pawnWestAttackTarget));
+
+            var move = Move.init(
+                originSquare,
+                targetSquare,
+                self.board,
+                .{ .Capture = .{
+                    .capturedPiece = self.board.getPiece(targetSquare),
+                } },
+            );
+
+            if (EngineController.isWhiteOrBlackPromotionSquare(targetSquare)) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QueenPromotionCapture = .{
+                        .capturedPiece = self.board.getPiece(targetSquare),
+                    } },
+                );
+            }
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+            pawnWestAttackTarget &= ~(@as(u64, 1) << targetSquare);
+            pawnWestAble2Capture &= ~(@as(u64, 1) << originSquare);
+        }
     }
 
     pub fn genMoves(self: *EngineController) void {
@@ -136,15 +208,22 @@ pub const EngineController = struct {
         const move = self.pseudoLegalMoves.items[randomIndex];
         self.board.makeMove(move);
 
-        self.board.pieceToMove = PieceColor.White;
+        // self.board.pieceToMove = PieceColor.White;
     }
 
     pub fn update(self: *EngineController, deltaTime: f32) void {
-        if (self.timeSinceLastMove >= 0.3) {
-            self.timeSinceLastMove = 0;
+        _ = deltaTime;
+
+        if (rl.isKeyPressed(rl.KeyboardKey.space)) {
             self.makeRandomMove();
             self.genMoves();
         }
-        self.timeSinceLastMove += deltaTime;
+
+        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
+            if (self.board.lastMoves.pop()) |lastMove| {
+                self.board.undoMove(lastMove);
+                self.genMoves();
+            }
+        }
     }
 };

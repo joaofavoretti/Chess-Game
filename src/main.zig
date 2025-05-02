@@ -40,9 +40,6 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    // state.player.makeMove(state.board, Move.init(8, 24, state.board, .{ .DoublePawnPush = .{} }));
-    // state.player.makeMove(state.board, Move.init(48, 40, state.board, .{ .QuietMove = .{} }));
-
     state.engine.genMoves();
 }
 

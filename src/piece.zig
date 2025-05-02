@@ -14,7 +14,13 @@ pub const PieceColor = enum {
     White,
     Black,
 
+    // Eventually remove this
     pub fn oposite(self: PieceColor) PieceColor {
+        return if (self == PieceColor.White) PieceColor.Black else PieceColor.White;
+    }
+
+    // Correcting typo
+    pub fn opposite(self: PieceColor) PieceColor {
         return if (self == PieceColor.White) PieceColor.Black else PieceColor.White;
     }
 };

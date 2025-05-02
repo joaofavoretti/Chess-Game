@@ -46,6 +46,14 @@ pub const Board = struct {
         self.boards[@intFromEnum(color)][@intFromEnum(piece)] = updatedBitboard;
     }
 
+    pub fn getColorBitboard(self: *Board, color: PieceColor) Bitboard {
+        var colorBitboard: Bitboard = 0;
+        inline for (0..PieceTypeLength) |p| {
+            colorBitboard |= self.boards[@as(usize, @intFromEnum(color))][p];
+        }
+        return colorBitboard;
+    }
+
     pub fn shiftNorth(bitboard: Bitboard) Bitboard {
         return bitboard << 8;
     }
@@ -108,7 +116,7 @@ pub const Board = struct {
             .enPassantTarget = if (enPassant[0] == '-') 0 else parseSquare(enPassant),
             .halfMoveClock = std.fmt.parseUnsigned(u8, halfMoveClock, 10) catch @panic("Invalid halfmove clock"),
             .fullMoveNumber = std.fmt.parseUnsigned(u8, fullMoveNumber, 10) catch @panic("Invalid fullmove number"),
-            .lastMoves = std.ArrayList(Move).init(std.heap.c_allocator),
+            .lastMoves = std.ArrayList(Move).init(std.heap.page_allocator),
         };
 
         // Parse piece placement

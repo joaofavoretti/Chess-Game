@@ -50,3 +50,19 @@ pub fn blackPawnDblAttack(pawns: Bitboard) Bitboard {
 pub fn blackPawnSingleAttack(pawns: Bitboard) Bitboard {
     return blackPawnEastAttack(pawns) ^ blackPawnWestAttack(pawns);
 }
+
+pub fn whitePawnAble2CaptureEast(attackTarget: Bitboard) Bitboard {
+    return Board.shiftWest(Board.shiftSouth(attackTarget));
+}
+
+pub fn whitePawnAble2CaptureWest(attackTarget: Bitboard) Bitboard {
+    return Board.shiftEast(Board.shiftSouth(attackTarget));
+}
+
+pub fn blackPawnAble2CaptureEast(attackTarget: Bitboard) Bitboard {
+    return Board.shiftWest(Board.shiftNorth(attackTarget));
+}
+
+pub fn blackPawnAble2CaptureWest(attackTarget: Bitboard) Bitboard {
+    return Board.shiftEast(Board.shiftNorth(attackTarget));
+}
