@@ -80,7 +80,7 @@ pub const Move = struct {
     // Board state memory (I still dont know if I should)
     pieceToMove: PieceColor,
     castlingRights: u8,
-    enPassantTarget: u6,
+    enPassantTarget: ?u6,
     halfMoveClock: u8,
     fullMoveNumber: u8,
 

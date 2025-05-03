@@ -63,6 +63,11 @@ fn draw() void {
     if (state.player.selectedSquare.isSelected) {
         state.render.highlightTile(state.player.selectedSquare.square);
     }
+
+    if (state.board.enPassantTarget) |enPassantTarget| {
+        state.render.highlightTile(enPassantTarget);
+    }
+
     state.render.drawPieces(state.board);
     state.render.drawPossibleMoves(state.player);
     state.render.drawPossibleMovesFromList(&state.engine.pseudoLegalMoves);

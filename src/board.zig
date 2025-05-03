@@ -27,7 +27,7 @@ pub const Board = struct {
     boards: [PieceColorLength][PieceTypeLength]Bitboard,
     pieceToMove: PieceColor,
     castlingRights: u8,
-    enPassantTarget: u6,
+    enPassantTarget: ?u6,
     halfMoveClock: u8,
     fullMoveNumber: u8,
     lastMoves: std.ArrayList(Move),
@@ -113,7 +113,7 @@ pub const Board = struct {
             .boards = std.mem.zeroes([PieceColorLength][PieceTypeLength]Bitboard),
             .pieceToMove = if (activeColor[0] == 'w') PieceColor.White else PieceColor.Black,
             .castlingRights = 0,
-            .enPassantTarget = if (enPassant[0] == '-') 0 else parseSquare(enPassant),
+            .enPassantTarget = if (enPassant[0] == '-') null else parseSquare(enPassant),
             .halfMoveClock = std.fmt.parseUnsigned(u8, halfMoveClock, 10) catch @panic("Invalid halfmove clock"),
             .fullMoveNumber = std.fmt.parseUnsigned(u8, fullMoveNumber, 10) catch @panic("Invalid fullmove number"),
             .lastMoves = std.ArrayList(Move).init(std.heap.page_allocator),
@@ -271,6 +271,7 @@ pub const Board = struct {
             }
         }
 
+        board.enPassantTarget = null;
         if (move.getCode() == MoveCode.DoublePawnPush) {
             const direction: i32 = if (piece.getColor() == PieceColor.White) -1 else 1;
             board.enPassantTarget = @intCast(move.to + direction * 8);

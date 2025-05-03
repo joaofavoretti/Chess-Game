@@ -72,16 +72,18 @@ pub const PlayerController = struct {
             }
 
             // En passant capture
-            if (targetSquare == board.enPassantTarget) {
-                if (board.lastMoves.getLastOrNull()) |lastMove| {
-                    var lastMovePiece = board.getPiece(lastMove.to);
-                    if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.getCode() == MoveCode.DoublePawnPush) {
-                        self.pseudoLegalMoves.append(Move.init(
-                            self.selectedSquare.square,
-                            targetSquare,
-                            board,
-                            .{ .EnPassant = .{ .capturedPiece = lastMovePiece } },
-                        )) catch std.debug.panic("Failed to append move", .{});
+            if (board.enPassantTarget) |enPassantTarget| {
+                if (targetSquare == enPassantTarget) {
+                    if (board.lastMoves.getLastOrNull()) |lastMove| {
+                        var lastMovePiece = board.getPiece(lastMove.to);
+                        if (lastMovePiece.valid and lastMovePiece.getColor() != color and lastMove.getCode() == MoveCode.DoublePawnPush) {
+                            self.pseudoLegalMoves.append(Move.init(
+                                self.selectedSquare.square,
+                                targetSquare,
+                                board,
+                                .{ .EnPassant = .{ .capturedPiece = lastMovePiece } },
+                            )) catch std.debug.panic("Failed to append move", .{});
+                        }
                     }
                 }
             }
@@ -423,12 +425,6 @@ pub const PlayerController = struct {
 
     pub fn update(self: *PlayerController, deltaTime: f32, render: *Render, board: *Board) void {
         _ = deltaTime;
-
-        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
-            if (board.lastMoves.pop()) |lastMove| {
-                board.undoMove(lastMove);
-            }
-        }
 
         self.updateSelectedSquare(render, board);
 

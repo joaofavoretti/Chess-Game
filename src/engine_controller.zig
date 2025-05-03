@@ -10,6 +10,8 @@ const pawnAttackUtils = @import("engine_utils/pawn_attack.zig");
 const Board = b.Board;
 const Render = r.Render;
 const Move = m.Move;
+const MoveCode = m.MoveCode;
+const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const Bitboard = b.Bitboard;
@@ -116,10 +118,17 @@ pub const EngineController = struct {
             PieceColor.Black => pawnAttackUtils.blackPawnWestAttack(pawnBitboard),
         };
 
-        var oppositePawnBitboard = self.board.getColorBitboard(colorToMove.opposite());
-        oppositePawnBitboard |= self.board.enPassantTarget;
+        var oppositeColorBitboard = self.board.getColorBitboard(colorToMove.opposite());
 
-        var pawnEastAttackTarget = pawnEastAttacks & oppositePawnBitboard;
+        // Check the EnPassant target square as valid
+        if (self.board.enPassantTarget) |enPassantTarget| {
+            oppositeColorBitboard |= (@as(u64, 1) << enPassantTarget);
+        }
+
+        std.debug.print("Opposite Pawn Bitboard\n", .{});
+        Render.printBitboard(oppositeColorBitboard);
+
+        var pawnEastAttackTarget = pawnEastAttacks & oppositeColorBitboard;
         var pawnEastAble2Capture = switch (colorToMove) {
             PieceColor.White => pawnAttackUtils.whitePawnAble2CaptureEast(pawnEastAttackTarget),
             PieceColor.Black => pawnAttackUtils.blackPawnAble2CaptureEast(pawnEastAttackTarget),
@@ -129,14 +138,28 @@ pub const EngineController = struct {
             const originSquare: u6 = @intCast(@ctz(pawnEastAble2Capture));
             const targetSquare: u6 = @intCast(@ctz(pawnEastAttackTarget));
 
+            const capturedPiece = self.board.getPiece(targetSquare);
+
             var move = Move.init(
                 originSquare,
                 targetSquare,
                 self.board,
-                .{ .Capture = .{
-                    .capturedPiece = self.board.getPiece(targetSquare),
-                } },
+                .{ .Capture = .{ .capturedPiece = capturedPiece } },
             );
+
+            if (!capturedPiece.valid) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .EnPassant = .{
+                        .capturedPiece = Piece.init(
+                            colorToMove.opposite(),
+                            PieceType.Pawn,
+                        ),
+                    } },
+                );
+            }
 
             if (EngineController.isWhiteOrBlackPromotionSquare(targetSquare)) {
                 move = Move.init(
@@ -144,7 +167,7 @@ pub const EngineController = struct {
                     targetSquare,
                     self.board,
                     .{ .QueenPromotionCapture = .{
-                        .capturedPiece = self.board.getPiece(targetSquare),
+                        .capturedPiece = capturedPiece,
                     } },
                 );
             }
@@ -154,7 +177,7 @@ pub const EngineController = struct {
             pawnEastAble2Capture &= ~(@as(u64, 1) << originSquare);
         }
 
-        var pawnWestAttackTarget = pawnWestAttacks & oppositePawnBitboard;
+        var pawnWestAttackTarget = pawnWestAttacks & oppositeColorBitboard;
         var pawnWestAble2Capture = switch (colorToMove) {
             PieceColor.White => pawnAttackUtils.whitePawnAble2CaptureWest(pawnWestAttackTarget),
             PieceColor.Black => pawnAttackUtils.blackPawnAble2CaptureWest(pawnWestAttackTarget),
@@ -164,22 +187,38 @@ pub const EngineController = struct {
             const originSquare: u6 = @intCast(@ctz(pawnWestAble2Capture));
             const targetSquare: u6 = @intCast(@ctz(pawnWestAttackTarget));
 
+            const capturedPiece = self.board.getPiece(targetSquare);
+
             var move = Move.init(
                 originSquare,
                 targetSquare,
                 self.board,
-                .{ .Capture = .{
-                    .capturedPiece = self.board.getPiece(targetSquare),
-                } },
+                .{ .Capture = .{ .capturedPiece = capturedPiece } },
             );
 
+            // Condition to be an enPassant capture
+            if (!capturedPiece.valid) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .EnPassant = .{
+                        .capturedPiece = Piece.init(
+                            colorToMove.opposite(),
+                            PieceType.Pawn,
+                        ),
+                    } },
+                );
+            }
+
+            // Capture with promotion
             if (EngineController.isWhiteOrBlackPromotionSquare(targetSquare)) {
                 move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QueenPromotionCapture = .{
-                        .capturedPiece = self.board.getPiece(targetSquare),
+                        .capturedPiece = capturedPiece,
                     } },
                 );
             }
