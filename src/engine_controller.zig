@@ -125,9 +125,6 @@ pub const EngineController = struct {
             oppositeColorBitboard |= (@as(u64, 1) << enPassantTarget);
         }
 
-        std.debug.print("Opposite Pawn Bitboard\n", .{});
-        Render.printBitboard(oppositeColorBitboard);
-
         var pawnEastAttackTarget = pawnEastAttacks & oppositeColorBitboard;
         var pawnEastAble2Capture = switch (colorToMove) {
             PieceColor.White => pawnAttackUtils.whitePawnAble2CaptureEast(pawnEastAttackTarget),
@@ -229,11 +226,70 @@ pub const EngineController = struct {
         }
     }
 
+    // U64 knightAttacks(U64 knights) {
+    //    U64 l1 = (knights >> 1) & C64(0x7f7f7f7f7f7f7f7f);
+    //    U64 l2 = (knights >> 2) & C64(0x3f3f3f3f3f3f3f3f);
+    //    U64 r1 = (knights << 1) & C64(0xfefefefefefefefe);
+    //    U64 r2 = (knights << 2) & C64(0xfcfcfcfcfcfcfcfc);
+    //    U64 h1 = l1 | r1;
+    //    U64 h2 = l2 | r2;
+    //    return (h1<<16) | (h1>>16) | (h2<<8) | (h2>>8);
+    // }
+
+    fn knightAttacks(knightBitboard: Bitboard) Bitboard {
+        const l1 = (knightBitboard >> 1) & 0x7f7f7f7f7f7f7f7f;
+        const l2 = (knightBitboard >> 2) & 0x3f3f3f3f3f3f3f3f;
+        const r1 = (knightBitboard << 1) & 0xfefefefefefefefe;
+        const r2 = (knightBitboard << 2) & 0xfcfcfcfcfcfcfcfc;
+        const h1 = l1 | r1;
+        const h2 = l2 | r2;
+        return (h1 << 16) | (h1 >> 16) | (h2 << 8) | (h2 >> 8);
+    }
+
+    fn genKnightMoves(self: *EngineController, colorToMove: PieceColor) void {
+        var knightBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Knight)];
+        const availableSquares = ~self.board.getColorBitboard(colorToMove);
+
+        while (knightBitboard != 0) {
+            const originSquare: u6 = @intCast(@ctz(knightBitboard));
+            var attackTarget = EngineController.knightAttacks(@as(u64, 1) << originSquare);
+            attackTarget &= availableSquares;
+
+            while (attackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+                var move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QuietMove = .{} },
+                );
+
+                const capturedPiece = self.board.getPiece(targetSquare);
+
+                if (capturedPiece.valid) {
+                    move = Move.init(
+                        originSquare,
+                        targetSquare,
+                        self.board,
+                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                    );
+                }
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                attackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+            knightBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
     pub fn genMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
         self.genPawnPushes(colorToMove);
         self.genPawnAttacks(colorToMove);
+        self.genKnightMoves(colorToMove);
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
