@@ -226,16 +226,6 @@ pub const EngineController = struct {
         }
     }
 
-    // U64 knightAttacks(U64 knights) {
-    //    U64 l1 = (knights >> 1) & C64(0x7f7f7f7f7f7f7f7f);
-    //    U64 l2 = (knights >> 2) & C64(0x3f3f3f3f3f3f3f3f);
-    //    U64 r1 = (knights << 1) & C64(0xfefefefefefefefe);
-    //    U64 r2 = (knights << 2) & C64(0xfcfcfcfcfcfcfcfc);
-    //    U64 h1 = l1 | r1;
-    //    U64 h2 = l2 | r2;
-    //    return (h1<<16) | (h1>>16) | (h2<<8) | (h2>>8);
-    // }
-
     fn knightAttacks(knightBitboard: Bitboard) Bitboard {
         const l1 = (knightBitboard >> 1) & 0x7f7f7f7f7f7f7f7f;
         const l2 = (knightBitboard >> 2) & 0x3f3f3f3f3f3f3f3f;
@@ -284,12 +274,117 @@ pub const EngineController = struct {
         }
     }
 
+    fn rankMask(square: u6) Bitboard {
+        return @as(u64, 0b11111111) << @intCast(square & 0b111000);
+    }
+
+    fn fileMask(square: u6) Bitboard {
+        return @as(u64, 0x0101010101010101) << @intCast(square & 0b111);
+    }
+
+    fn eastMaskEx(square: u6) Bitboard {
+        return 2 * ((@as(u64, 1) << @intCast(square | 7)) - (@as(u64, 1) << @intCast(square)));
+    }
+
+    fn nortMaskEx(square: u6) Bitboard {
+        return @as(u64, 0x0101010101010100) << square;
+    }
+
+    fn westMaskEx(square: u6) Bitboard {
+        return (@as(u64, 1) << square) - (@as(u64, 1) << @intCast(square & 0b111000));
+    }
+
+    fn southMaskEx(square: u6) Bitboard {
+        return @as(u64, 0x0080808080808080) >> (square ^ 0b111111);
+    }
+
+    fn rookAttacks(rookSquare: u6, sameColorPieces: Bitboard, oppositeColorPieces: Bitboard) Bitboard {
+        const blockers = sameColorPieces | oppositeColorPieces;
+
+        const eastAttacksEmptyBoard = eastMaskEx(rookSquare);
+        const eastAttackBlockers = eastAttacksEmptyBoard & blockers;
+        var eastAttacks = eastAttacksEmptyBoard;
+        if (eastAttackBlockers != 0) {
+            const eastAttackBlockerSquare: u6 = @intCast(@ctz(eastAttackBlockers));
+            eastAttacks = (eastAttacksEmptyBoard ^ eastMaskEx(eastAttackBlockerSquare)) & ~sameColorPieces;
+        }
+
+        const nortAttacksEmptyBoard = nortMaskEx(rookSquare);
+        const nortAttackBlockers = nortAttacksEmptyBoard & blockers;
+        var nortAttacks = nortAttacksEmptyBoard;
+        if (nortAttackBlockers != 0) {
+            const nortAttackBlockerSquare: u6 = @intCast(@ctz(nortAttackBlockers));
+            nortAttacks = (nortAttacksEmptyBoard ^ nortMaskEx(nortAttackBlockerSquare)) & ~sameColorPieces;
+        }
+
+        const westAttacksEmptyBoard = westMaskEx(rookSquare);
+        const westAttackBlockers = westAttacksEmptyBoard & blockers;
+        var westAttacks = westAttacksEmptyBoard;
+        if (westAttackBlockers != 0) {
+            const westAttackBlockerSquare: u6 = @intCast(@clz(westAttackBlockers));
+            westAttacks = (westAttacksEmptyBoard ^ westMaskEx(westAttackBlockerSquare)) & ~sameColorPieces;
+        }
+
+        const southAttacksEmptyBoard = southMaskEx(rookSquare);
+        const southAttackBlockers = southAttacksEmptyBoard & blockers;
+        var southAttacks = southAttacksEmptyBoard;
+        if (southAttackBlockers != 0) {
+            const southAttackBlockerSquare: u6 = @intCast(@clz(southAttackBlockers));
+            southAttacks = (southAttacksEmptyBoard ^ southMaskEx(southAttackBlockerSquare)) & ~sameColorPieces;
+        }
+
+        return eastAttacks | nortAttacks | westAttacks | southAttacks;
+    }
+
+    fn genRookMoves(self: *EngineController, colorToMove: PieceColor) void {
+        var rookBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Rook)];
+
+        while (rookBitboard != 0) {
+            const originSquare: u6 = @intCast(@ctz(rookBitboard));
+
+            var attackTarget = EngineController.rookAttacks(
+                originSquare,
+                self.board.getColorBitboard(colorToMove),
+                self.board.getColorBitboard(colorToMove.opposite()),
+            );
+
+            while (attackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+                var move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QuietMove = .{} },
+                );
+
+                const capturedPiece = self.board.getPiece(targetSquare);
+
+                if (capturedPiece.valid) {
+                    move = Move.init(
+                        originSquare,
+                        targetSquare,
+                        self.board,
+                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                    );
+                }
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                attackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            rookBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
     pub fn genMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
         self.genPawnPushes(colorToMove);
         self.genPawnAttacks(colorToMove);
         self.genKnightMoves(colorToMove);
+        self.genRookMoves(colorToMove);
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
