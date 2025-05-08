@@ -16,6 +16,17 @@ const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const Bitboard = b.Bitboard;
 
+const index64: [64]u32 = [_]u32{
+    0,  47, 1,  56, 48, 27, 2,  60,
+    57, 49, 41, 37, 28, 16, 3,  61,
+    54, 58, 35, 52, 50, 42, 21, 44,
+    38, 32, 29, 23, 17, 11, 4,  62,
+    46, 55, 26, 59, 40, 36, 15, 53,
+    34, 51, 20, 43, 31, 22, 10, 45,
+    25, 39, 14, 33, 19, 30, 9,  24,
+    13, 18, 8,  12, 7,  6,  5,  63,
+};
+
 pub const EngineController = struct {
     board: *Board,
     timeSinceLastMove: f32 = 0,
@@ -291,11 +302,25 @@ pub const EngineController = struct {
     }
 
     fn westMaskEx(square: u6) Bitboard {
-        return (@as(u64, 1) << square) - (@as(u64, 1) << @intCast(square & 0b111000));
+        const one: Bitboard = 1;
+        return (one << square) - ((one << @intCast(square & 0b111000)));
     }
 
     fn southMaskEx(square: u6) Bitboard {
         return @as(u64, 0x0080808080808080) >> (square ^ 0b111111);
+    }
+
+    fn reverseBitscan(bb_: Bitboard) u6 {
+        const debruijn64: u64 = 0x03f79d71b4cb0a89;
+        var bb: Bitboard = bb_;
+        if (bb == 0) return 0;
+        bb |= bb >> 1;
+        bb |= bb >> 2;
+        bb |= bb >> 4;
+        bb |= bb >> 8;
+        bb |= bb >> 16;
+        bb |= bb >> 32;
+        return @intCast(index64[@mulWithOverflow(bb, debruijn64)[0] >> 58]);
     }
 
     fn rookAttacks(rookSquare: u6, sameColorPieces: Bitboard, oppositeColorPieces: Bitboard) Bitboard {
@@ -321,7 +346,7 @@ pub const EngineController = struct {
         const westAttackBlockers = westAttacksEmptyBoard & blockers;
         var westAttacks = westAttacksEmptyBoard;
         if (westAttackBlockers != 0) {
-            const westAttackBlockerSquare: u6 = @intCast(@clz(westAttackBlockers));
+            const westAttackBlockerSquare = reverseBitscan(westAttackBlockers);
             westAttacks = (westAttacksEmptyBoard ^ westMaskEx(westAttackBlockerSquare)) & ~sameColorPieces;
         }
 
@@ -329,7 +354,7 @@ pub const EngineController = struct {
         const southAttackBlockers = southAttacksEmptyBoard & blockers;
         var southAttacks = southAttacksEmptyBoard;
         if (southAttackBlockers != 0) {
-            const southAttackBlockerSquare: u6 = @intCast(@clz(southAttackBlockers));
+            const southAttackBlockerSquare: u6 = reverseBitscan(southAttackBlockers);
             southAttacks = (southAttacksEmptyBoard ^ southMaskEx(southAttackBlockerSquare)) & ~sameColorPieces;
         }
 
@@ -378,6 +403,11 @@ pub const EngineController = struct {
         }
     }
 
+    fn genBishopMoves(self: *EngineController, colorToMove: PieceColor) void {
+        _ = self;
+        _ = colorToMove;
+    }
+
     pub fn genMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
@@ -385,6 +415,7 @@ pub const EngineController = struct {
         self.genPawnAttacks(colorToMove);
         self.genKnightMoves(colorToMove);
         self.genRookMoves(colorToMove);
+        self.genBishopMoves(colorToMove);
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
