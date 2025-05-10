@@ -23,6 +23,7 @@ pub const GameState = struct {
         board.* = Board.initFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         // board.* = Board.initFromFEN("8/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         // board.* = Board.initFromFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+        // board.* = Board.initFromFEN("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
         // board.* = Board.initFromFEN("r3k2r/7p/8/8/8/8/7P/R3K2R w KQkq - 0 1");
         // board.* = Board.initFromFEN("8/1r6/5r2/8/8/5R2/1R6/8 b KQkq - 0 1");
         // board.* = Board.initFromFEN("8/8/2r2r2/8/8/2R2R2/8/8 b KQkq - 0 1");

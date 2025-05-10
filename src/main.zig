@@ -1,4 +1,5 @@
 const std = @import("std");
+const time = std.time;
 const rl = @import("raylib");
 const iv = @import("ivector.zig");
 const p = @import("piece.zig");
@@ -40,7 +41,14 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    state.engine.genMoves();
+    // state.engine.genMoves();
+
+    for (1..7) |i| {
+        var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
+        t.reset();
+        const countPossibleMoves = state.engine.countPossibleMoves(i);
+        std.debug.print("CountPossibleMoves({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
+    }
 }
 
 fn destroy() void {

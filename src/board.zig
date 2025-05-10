@@ -249,7 +249,6 @@ pub const Board = struct {
 
         // if the captured piece is a rook, I also need to update the castling rights
         if (move.getCode().isCapture() and move.getCapturedPiece().getPieceType() == PieceType.Rook) {
-            std.log.info("Captured rook", .{});
             const capturedRook = move.getCapturedPiece();
             const shiftAmount: u2 = if (capturedRook.getColor() == PieceColor.White) 0 else 2;
             const castlingRightsMask = @as(u4, 0b0011) << shiftAmount;

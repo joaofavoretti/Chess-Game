@@ -621,6 +621,97 @@ pub const EngineController = struct {
         }
     }
 
+    fn kingAttacks(kingBitboard: Bitboard) Bitboard {
+        var kingSet = kingBitboard;
+        var attacks = Board.shiftEast(kingSet) | Board.shiftWest(kingSet);
+        kingSet |= attacks;
+        attacks |= Board.shiftNorth(kingSet) | Board.shiftSouth(kingSet);
+        return attacks;
+    }
+
+    fn genKingMoves(self: *EngineController, colorToMove: PieceColor) void {
+        const kingBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.King)];
+        const availableSquares = ~(self.board.getColorBitboard(colorToMove) | self.board.getColorBitboard(colorToMove.opposite()));
+
+        if (kingBitboard == 0) {
+            return;
+        }
+
+        // Obtaining king attacks
+        var attacks = EngineController.kingAttacks(kingBitboard);
+        const originSquare: u6 = @intCast(@ctz(kingBitboard));
+        while (attacks != 0) {
+            const targetSquare: u6 = @intCast(@ctz(attacks));
+
+            var move = Move.init(
+                originSquare,
+                targetSquare,
+                self.board,
+                .{ .QuietMove = .{} },
+            );
+
+            const capturedPiece = self.board.getPiece(targetSquare);
+
+            if (capturedPiece.valid) {
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+            }
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+
+            attacks &= ~(@as(u64, 1) << targetSquare);
+        }
+
+        const castlingRightsMask = switch (colorToMove) {
+            PieceColor.White => @as(u8, 0b00000011),
+            PieceColor.Black => @as(u8, 0b00001100),
+        };
+        const castlingRights = (self.board.castlingRights & castlingRightsMask) >> @intCast(@ctz(castlingRightsMask));
+
+        if (castlingRights == 0) {
+            return;
+        }
+
+        // Can castle king side - east
+        if (castlingRights & 0b01 != 0) {
+            const eastCastleMask = Board.shiftEast(kingBitboard) |
+                Board.shiftEast(Board.shiftEast(kingBitboard));
+
+            if (availableSquares & eastCastleMask == eastCastleMask) {
+                const targetSquare: u6 = @intCast(@ctz(Board.shiftEast(Board.shiftEast(kingBitboard))));
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .KingCastle = .{} },
+                );
+                self.pseudoLegalMoves.append(move) catch unreachable;
+            }
+        }
+
+        // Can castle queen side - west
+        if (castlingRights & 0b10 != 0) {
+            const westCastleMask = Board.shiftWest(kingBitboard) |
+                Board.shiftWest(Board.shiftWest(kingBitboard)) |
+                Board.shiftWest(Board.shiftWest(Board.shiftWest(kingBitboard)));
+
+            if (availableSquares & westCastleMask == westCastleMask) {
+                const targetSquare: u6 = @intCast(@ctz(Board.shiftWest(Board.shiftWest(kingBitboard))));
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .QueenCastle = .{} },
+                );
+                self.pseudoLegalMoves.append(move) catch unreachable;
+            }
+        }
+    }
+
     pub fn genMoves(self: *EngineController) void {
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
@@ -630,6 +721,7 @@ pub const EngineController = struct {
         self.genRookMoves(colorToMove);
         self.genBishopMoves(colorToMove);
         self.genQueenMoves(colorToMove);
+        self.genKingMoves(colorToMove);
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
@@ -642,8 +734,22 @@ pub const EngineController = struct {
         const randomIndex = random.uintLessThan(usize, self.pseudoLegalMoves.items.len);
         const move = self.pseudoLegalMoves.items[randomIndex];
         self.board.makeMove(move);
+    }
 
-        // self.board.pieceToMove = PieceColor.White;
+    pub fn countPossibleMoves(self: *EngineController, depth: usize) u32 {
+        if (depth == 0) {
+            return 1;
+        }
+
+        var count: u32 = 0;
+        self.genMoves();
+        const moves = self.pseudoLegalMoves.toOwnedSlice() catch std.debug.panic("Failed to allocate memory for moves", .{});
+        for (moves) |move| {
+            self.board.makeMove(move);
+            count += self.countPossibleMoves(depth - 1);
+            self.board.undoMove(move);
+        }
+        return count;
     }
 
     pub fn update(self: *EngineController, deltaTime: f32) void {
