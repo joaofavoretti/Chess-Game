@@ -26,6 +26,8 @@ pub const GameState = struct {
         // board.* = Board.initFromFEN("r3k2r/7p/8/8/8/8/7P/R3K2R w KQkq - 0 1");
         // board.* = Board.initFromFEN("8/1r6/5r2/8/8/5R2/1R6/8 b KQkq - 0 1");
         // board.* = Board.initFromFEN("8/8/2r2r2/8/8/2R2R2/8/8 b KQkq - 0 1");
+        // board.* = Board.initFromFEN("8/8/2b2b2/8/8/2B2B2/8/8 b KQkq - 0 1");
+        // board.* = Board.initFromFEN("8/8/2b2b2/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
 
         const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
         player.* = PlayerController.init(render);
