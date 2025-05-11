@@ -46,8 +46,8 @@ fn setup() void {
     for (1..5) |i| {
         var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
         t.reset();
-        const countPossibleMoves = state.engine.countPossibleMoves(i);
-        std.debug.print("CountPossibleMoves({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
+        const countPossibleMoves = state.engine.perft(i);
+        std.debug.print("Perft({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
     }
 }
 
@@ -74,6 +74,11 @@ fn draw() void {
 
     if (state.board.enPassantTarget) |enPassantTarget| {
         state.render.highlightTile(enPassantTarget);
+    }
+
+    if (EngineController.isKingInCheck(state.engine.board)) {
+        const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
+        state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
     }
 
     state.render.drawPieces(state.board);

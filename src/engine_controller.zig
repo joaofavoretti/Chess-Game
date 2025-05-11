@@ -266,6 +266,7 @@ pub const EngineController = struct {
             attackTarget &= availableSquares;
 
             var captureTarget = attackTarget & self.board.getColorBitboard(colorToMove.opposite());
+            attackTarget &= ~captureTarget;
 
             // Capture moves
             while (captureTarget != 0) {
@@ -286,8 +287,6 @@ pub const EngineController = struct {
             }
 
             // Quiet moves
-            attackTarget &= ~captureTarget;
-
             while (attackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(attackTarget));
 
@@ -654,6 +653,51 @@ pub const EngineController = struct {
         }
     }
 
+    pub fn isKingInCheck(board: *Board) bool {
+        const colorToMove = board.pieceToMove;
+        const kingBitboard = board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.King)];
+
+        const opPawnBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Pawn)];
+        const opKnightBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Knight)];
+        const opBishopBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Bishop)];
+        const opRookBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Rook)];
+        const opQueenBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Queen)];
+
+        // Figuring out pawn attacks
+        const pawnCaptureTarget = switch (colorToMove) {
+            PieceColor.White => pawnAttackUtils.blackPawnAnyAttacks(opPawnBitboard),
+            PieceColor.Black => pawnAttackUtils.whitePawnAnyAttacks(opPawnBitboard),
+        };
+
+        if (pawnCaptureTarget & kingBitboard != 0) {
+            return true;
+        }
+
+        if (EngineController.knightAttacks(kingBitboard) & opKnightBitboard != 0) {
+            return true;
+        }
+
+        const rookAttackTargets = EngineController.rookAttacks(
+            @intCast(@ctz(kingBitboard)),
+            board.getColorBitboard(colorToMove),
+            board.getColorBitboard(colorToMove.opposite()),
+        );
+        if ((rookAttackTargets & opRookBitboard != 0) or (rookAttackTargets & opQueenBitboard != 0)) {
+            return true;
+        }
+
+        const bishopAttackTargets = EngineController.bishopAttacks(
+            @intCast(@ctz(kingBitboard)),
+            board.getColorBitboard(colorToMove),
+            board.getColorBitboard(colorToMove.opposite()),
+        );
+        if ((bishopAttackTargets & opBishopBitboard != 0) or (bishopAttackTargets & opQueenBitboard != 0)) {
+            return true;
+        }
+
+        return false;
+    }
+
     fn kingAttacks(kingBitboard: Bitboard) Bitboard {
         var kingSet = kingBitboard;
         var attacks = Board.shiftEast(kingSet) | Board.shiftWest(kingSet);
@@ -782,7 +826,7 @@ pub const EngineController = struct {
         self.board.makeMove(move);
     }
 
-    pub fn countPossibleMoves(self: *EngineController, depth: usize) u32 {
+    pub fn perft(self: *EngineController, depth: usize) u32 {
         var count: u32 = 0;
         self.genMoves();
 
@@ -793,7 +837,9 @@ pub const EngineController = struct {
         var newEngine = self.copyEmpty();
         for (self.pseudoLegalMoves.items) |move| {
             newEngine.board.makeMove(move);
-            count += newEngine.countPossibleMoves(depth - 1);
+            if (!EngineController.isKingInCheck(newEngine.board)) {
+                count += newEngine.perft(depth - 1);
+            }
             newEngine.board.undoMove(move);
         }
         return count;

@@ -245,6 +245,23 @@ pub const Render = struct {
         );
     }
 
+    pub fn highlightTileColor(self: *Render, square: u6, color: rl.Color) void {
+        const pos = self.getPosFromSquare(square);
+
+        const c = rl.Color.init(color.r, color.g, color.b, 50);
+
+        const x = self.offset.x + pos.x * self.tileSize;
+        const y = self.offset.y + pos.y * self.tileSize;
+
+        rl.drawRectangle(
+            x,
+            y,
+            self.tileSize,
+            self.tileSize,
+            c,
+        );
+    }
+
     fn drawPiece(self: *Render, pieceColor: PieceColor, pieceType: PieceType, square: u6) void {
         const pos = self.getPosFromSquare(square);
 
