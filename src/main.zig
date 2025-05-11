@@ -43,7 +43,7 @@ fn setup() void {
 
     // state.engine.genMoves();
 
-    for (1..4) |i| {
+    for (1..5) |i| {
         var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
         t.reset();
         const countPossibleMoves = state.engine.countPossibleMoves(i);

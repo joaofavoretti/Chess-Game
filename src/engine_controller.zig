@@ -783,12 +783,13 @@ pub const EngineController = struct {
     }
 
     pub fn countPossibleMoves(self: *EngineController, depth: usize) u32 {
-        if (depth == 0) {
-            return 1;
-        }
-
         var count: u32 = 0;
         self.genMoves();
+
+        if (depth == 1) {
+            return @intCast(self.pseudoLegalMoves.items.len);
+        }
+
         var newEngine = self.copyEmpty();
         for (self.pseudoLegalMoves.items) |move| {
             newEngine.board.makeMove(move);
