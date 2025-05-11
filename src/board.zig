@@ -202,6 +202,17 @@ pub const Board = struct {
         return Piece.initInvalid();
     }
 
+    pub fn getPieceFromColor(self: *Board, square: u6, color: PieceColor) Piece {
+        for (0..PieceTypeLength) |p| {
+            const piece: PieceType = @enumFromInt(p);
+            const bitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))];
+            if ((bitboard >> square) & 1 == 1) {
+                return Piece.init(color, piece);
+            }
+        }
+        return Piece.initInvalid();
+    }
+
     pub fn makeMove(board: *Board, move: Move) void {
         var piece = board.getPiece(move.from);
 

@@ -40,6 +40,14 @@ pub const EngineController = struct {
         };
     }
 
+    pub fn copyEmpty(self: *EngineController) EngineController {
+        return EngineController{
+            .board = self.board,
+            .timeSinceLastMove = self.timeSinceLastMove,
+            .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.c_allocator),
+        };
+    }
+
     pub fn deinit(self: *EngineController) void {
         self.pseudoLegalMoves.deinit();
     }
@@ -257,26 +265,38 @@ pub const EngineController = struct {
             var attackTarget = EngineController.knightAttacks(@as(u64, 1) << originSquare);
             attackTarget &= availableSquares;
 
+            var captureTarget = attackTarget & self.board.getColorBitboard(colorToMove.opposite());
+
+            // Capture moves
+            while (captureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+                const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                captureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            // Quiet moves
+            attackTarget &= ~captureTarget;
+
             while (attackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(attackTarget));
 
-                var move = Move.init(
+                const move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QuietMove = .{} },
                 );
-
-                const capturedPiece = self.board.getPiece(targetSquare);
-
-                if (capturedPiece.valid) {
-                    move = Move.init(
-                        originSquare,
-                        targetSquare,
-                        self.board,
-                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                    );
-                }
 
                 self.pseudoLegalMoves.append(move) catch unreachable;
 
@@ -293,34 +313,6 @@ pub const EngineController = struct {
     fn fileMask(square: u6) Bitboard {
         return @as(u64, 0x0101010101010101) << @intCast(square & 0b111);
     }
-
-    // U64 diagonalMask(int sq) {
-    //    const U64 maindia = C64(0x8040201008040201);
-    //    int diag =8*(sq & 7) - (sq & 56);
-    //    int nort = -diag & ( diag >> 31);
-    //    int sout =  diag & (-diag >> 31);
-    //    return (maindia >> sout) << nort;
-    // }
-    //
-    // U64 antiDiagMask(int sq) {
-    //    const U64 maindia = C64(0x0102040810204080);
-    //    int diag =56- 8*(sq&7) - (sq&56);
-    //    int nort = -diag & ( diag >> 31);
-    //    int sout =  diag & (-diag >> 31);
-    //    return (maindia >> sout) << nort;
-    // }
-
-    // U64 diagonalMask(int sq) {
-    //    const U64( maindia = C64(0x8040201008040201);
-    //    int diag  = (sq&7) - (sq>>3);
-    //    return diag >= 0 ? maindia >> diag*8 : maindia << -diag*8;
-    // }
-    //
-    // U64 antiDiagMask(int sq) {
-    //    const U64( maindia = C64(0x0102040810204080);
-    //    int diag  = 7 - (sq&7) - (sq>>3);
-    //    return diag >= 0 ? maindia >> diag*8 : maindia << -diag*8;
-    // }
 
     fn diagonalMask(square: u6) u64 {
         const maindia: u64 = 0x8040201008040201;
@@ -422,26 +414,38 @@ pub const EngineController = struct {
                 self.board.getColorBitboard(colorToMove.opposite()),
             );
 
+            var captureTarget = attackTarget & self.board.getColorBitboard(colorToMove.opposite());
+
+            attackTarget &= ~captureTarget;
+
+            // Capture moves
+            while (captureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+                const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                captureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            // Quiet Moves
             while (attackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(attackTarget));
 
-                var move = Move.init(
+                const move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QuietMove = .{} },
                 );
-
-                const capturedPiece = self.board.getPiece(targetSquare);
-
-                if (capturedPiece.valid) {
-                    move = Move.init(
-                        originSquare,
-                        targetSquare,
-                        self.board,
-                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                    );
-                }
 
                 self.pseudoLegalMoves.append(move) catch unreachable;
 
@@ -513,26 +517,36 @@ pub const EngineController = struct {
                 self.board.getColorBitboard(colorToMove.opposite()),
             );
 
+            var captureTarget = attackTarget & self.board.getColorBitboard(colorToMove.opposite());
+            attackTarget &= ~captureTarget;
+
+            // Capture moves
+            while (captureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+                const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                captureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
             while (attackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(attackTarget));
 
-                var move = Move.init(
+                const move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QuietMove = .{} },
                 );
-
-                const capturedPiece = self.board.getPiece(targetSquare);
-
-                if (capturedPiece.valid) {
-                    move = Move.init(
-                        originSquare,
-                        targetSquare,
-                        self.board,
-                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                    );
-                }
 
                 self.pseudoLegalMoves.append(move) catch unreachable;
 
@@ -558,27 +572,37 @@ pub const EngineController = struct {
                 self.board.getColorBitboard(colorToMove),
                 self.board.getColorBitboard(colorToMove.opposite()),
             );
+            var rookCaptureTarget = rookAttackTarget & self.board.getColorBitboard(colorToMove.opposite());
+            rookAttackTarget &= ~rookCaptureTarget;
 
+            // Capture moves
+            while (rookCaptureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(rookCaptureTarget));
+
+                const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                rookCaptureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            // Quiet Moves
             while (rookAttackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(rookAttackTarget));
 
-                var move = Move.init(
+                const move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QuietMove = .{} },
                 );
-
-                const capturedPiece = self.board.getPiece(targetSquare);
-
-                if (capturedPiece.valid) {
-                    move = Move.init(
-                        originSquare,
-                        targetSquare,
-                        self.board,
-                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                    );
-                }
 
                 self.pseudoLegalMoves.append(move) catch unreachable;
 
@@ -590,27 +614,36 @@ pub const EngineController = struct {
                 self.board.getColorBitboard(colorToMove),
                 self.board.getColorBitboard(colorToMove.opposite()),
             );
+            var bishopCaptureTarget = bishopAttackTarget & self.board.getColorBitboard(colorToMove.opposite());
+            bishopAttackTarget &= ~bishopCaptureTarget;
+
+            // Capture moves
+            while (bishopCaptureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(bishopCaptureTarget));
+
+                const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    self.board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                bishopCaptureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
 
             while (bishopAttackTarget != 0) {
                 const targetSquare: u6 = @intCast(@ctz(bishopAttackTarget));
 
-                var move = Move.init(
+                const move = Move.init(
                     originSquare,
                     targetSquare,
                     self.board,
                     .{ .QuietMove = .{} },
                 );
-
-                const capturedPiece = self.board.getPiece(targetSquare);
-
-                if (capturedPiece.valid) {
-                    move = Move.init(
-                        originSquare,
-                        targetSquare,
-                        self.board,
-                        .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                    );
-                }
 
                 self.pseudoLegalMoves.append(move) catch unreachable;
 
@@ -631,39 +664,52 @@ pub const EngineController = struct {
 
     fn genKingMoves(self: *EngineController, colorToMove: PieceColor) void {
         const kingBitboard = self.board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.King)];
-        const availableSquares = ~(self.board.getColorBitboard(colorToMove) | self.board.getColorBitboard(colorToMove.opposite()));
+        const availableSquares = ~self.board.getColorBitboard(colorToMove);
+        const occupiedSquares = self.board.getColorBitboard(colorToMove) |
+            self.board.getColorBitboard(colorToMove.opposite());
 
         if (kingBitboard == 0) {
             return;
         }
 
         // Obtaining king attacks
-        var attacks = EngineController.kingAttacks(kingBitboard);
         const originSquare: u6 = @intCast(@ctz(kingBitboard));
-        while (attacks != 0) {
-            const targetSquare: u6 = @intCast(@ctz(attacks));
+        var attackTarget = EngineController.kingAttacks(kingBitboard) & availableSquares;
+        var captureTarget = attackTarget & self.board.getColorBitboard(colorToMove.opposite());
+        attackTarget &= ~captureTarget;
 
-            var move = Move.init(
+        // Capture moves
+        while (captureTarget != 0) {
+            const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+            const capturedPiece = self.board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+            const move = Move.init(
+                originSquare,
+                targetSquare,
+                self.board,
+                .{ .Capture = .{ .capturedPiece = capturedPiece } },
+            );
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+
+            captureTarget &= ~(@as(u64, 1) << targetSquare);
+        }
+
+        // Quiet Moves
+        while (attackTarget != 0) {
+            const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+            const move = Move.init(
                 originSquare,
                 targetSquare,
                 self.board,
                 .{ .QuietMove = .{} },
             );
 
-            const capturedPiece = self.board.getPiece(targetSquare);
-
-            if (capturedPiece.valid) {
-                move = Move.init(
-                    originSquare,
-                    targetSquare,
-                    self.board,
-                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
-                );
-            }
-
             self.pseudoLegalMoves.append(move) catch unreachable;
 
-            attacks &= ~(@as(u64, 1) << targetSquare);
+            attackTarget &= ~(@as(u64, 1) << targetSquare);
         }
 
         const castlingRightsMask = switch (colorToMove) {
@@ -681,7 +727,7 @@ pub const EngineController = struct {
             const eastCastleMask = Board.shiftEast(kingBitboard) |
                 Board.shiftEast(Board.shiftEast(kingBitboard));
 
-            if (availableSquares & eastCastleMask == eastCastleMask) {
+            if (~occupiedSquares & eastCastleMask == eastCastleMask) {
                 const targetSquare: u6 = @intCast(@ctz(Board.shiftEast(Board.shiftEast(kingBitboard))));
                 const move = Move.init(
                     originSquare,
@@ -699,7 +745,7 @@ pub const EngineController = struct {
                 Board.shiftWest(Board.shiftWest(kingBitboard)) |
                 Board.shiftWest(Board.shiftWest(Board.shiftWest(kingBitboard)));
 
-            if (availableSquares & westCastleMask == westCastleMask) {
+            if (~occupiedSquares & westCastleMask == westCastleMask) {
                 const targetSquare: u6 = @intCast(@ctz(Board.shiftWest(Board.shiftWest(kingBitboard))));
                 const move = Move.init(
                     originSquare,
@@ -743,11 +789,11 @@ pub const EngineController = struct {
 
         var count: u32 = 0;
         self.genMoves();
-        const moves = self.pseudoLegalMoves.toOwnedSlice() catch std.debug.panic("Failed to allocate memory for moves", .{});
-        for (moves) |move| {
-            self.board.makeMove(move);
-            count += self.countPossibleMoves(depth - 1);
-            self.board.undoMove(move);
+        var newEngine = self.copyEmpty();
+        for (self.pseudoLegalMoves.items) |move| {
+            newEngine.board.makeMove(move);
+            count += newEngine.countPossibleMoves(depth - 1);
+            newEngine.board.undoMove(move);
         }
         return count;
     }
