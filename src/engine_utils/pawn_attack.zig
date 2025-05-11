@@ -59,18 +59,10 @@ pub fn whitePawnAble2CaptureWest(attackTarget: Bitboard) Bitboard {
     return Board.shiftEast(Board.shiftSouth(attackTarget));
 }
 
-pub fn whitePawnAble2Capture(attackTarget: Bitboard) Bitboard {
-    return whitePawnAble2CaptureEast(attackTarget) | whitePawnAble2CaptureWest(attackTarget);
-}
-
 pub fn blackPawnAble2CaptureEast(attackTarget: Bitboard) Bitboard {
     return Board.shiftWest(Board.shiftNorth(attackTarget));
 }
 
 pub fn blackPawnAble2CaptureWest(attackTarget: Bitboard) Bitboard {
     return Board.shiftEast(Board.shiftNorth(attackTarget));
-}
-
-pub fn blackPawnAble2Capture(attackTarget: Bitboard) Bitboard {
-    return blackPawnAble2CaptureEast(attackTarget) | blackPawnAble2CaptureWest(attackTarget);
 }
