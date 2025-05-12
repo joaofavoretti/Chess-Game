@@ -220,7 +220,7 @@ pub const PlayerController = struct {
                             self.selectedSquare.square,
                             targetSquare,
                             board,
-                            .{ .DoublePawnPush = .{} },
+                            .{ .Capture = .{ .capturedPiece = targetPiece } },
                         )) catch std.debug.panic("Failed to append move", .{});
                     }
                     break; // Stop moving in this direction after encountering a piece
