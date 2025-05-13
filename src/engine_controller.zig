@@ -32,11 +32,13 @@ pub const EngineController = struct {
     board: *Board,
     timeSinceLastMove: f32 = 0,
     pseudoLegalMoves: std.ArrayList(Move),
+    legalMoves: std.ArrayList(Move),
 
     pub fn init(board: *Board) EngineController {
         return EngineController{
             .board = board,
-            .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.c_allocator),
+            .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
+            .legalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
         };
     }
 
@@ -44,12 +46,14 @@ pub const EngineController = struct {
         return EngineController{
             .board = self.board,
             .timeSinceLastMove = self.timeSinceLastMove,
-            .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.c_allocator),
+            .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
+            .legalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
         };
     }
 
     pub fn deinit(self: *EngineController) void {
         self.pseudoLegalMoves.deinit();
+        self.legalMoves.deinit();
     }
 
     fn isWhiteOrBlackPromotionSquare(targetSquare: u6) bool {
@@ -713,6 +717,11 @@ pub const EngineController = struct {
 
     pub fn isKingInCheck(board: *Board) bool {
         const kingBitboard = board.boards[@intFromEnum(board.pieceToMove)][@intFromEnum(PieceType.King)];
+
+        if (kingBitboard == 0) {
+            return true;
+        }
+
         const kingSquare: u6 = @intCast(@ctz(kingBitboard));
         return EngineController.isSquareAttacked(kingSquare, board);
     }
@@ -723,6 +732,13 @@ pub const EngineController = struct {
         kingSet |= attacks;
         attacks |= Board.shiftNorth(kingSet) | Board.shiftSouth(kingSet);
         return attacks;
+    }
+
+    fn isMoveLegal(self: *EngineController, move: Move) bool {
+        self.board.makeMove(move);
+        const isLegal = !EngineController.isKingInCheck(self.board);
+        self.board.undoMove(move);
+        return isLegal;
     }
 
     fn genKingMoves(self: *EngineController, colorToMove: PieceColor) void {
@@ -790,7 +806,12 @@ pub const EngineController = struct {
             const eastCastleMask = Board.shiftEast(kingBitboard) |
                 Board.shiftEast(Board.shiftEast(kingBitboard));
 
-            if (~occupiedSquares & eastCastleMask == eastCastleMask) {
+            const haveIntermediaryCheck = EngineController.areSquaresAttacked(
+                eastCastleMask,
+                self.board,
+            );
+
+            if (!haveIntermediaryCheck and ~occupiedSquares & eastCastleMask == eastCastleMask) {
                 const targetSquare: u6 = @intCast(@ctz(Board.shiftEast(Board.shiftEast(kingBitboard))));
                 const move = Move.init(
                     originSquare,
@@ -808,7 +829,11 @@ pub const EngineController = struct {
                 Board.shiftWest(Board.shiftWest(kingBitboard)) |
                 Board.shiftWest(Board.shiftWest(Board.shiftWest(kingBitboard)));
 
-            if (~occupiedSquares & westCastleMask == westCastleMask) {
+            const westCastleCheckMask = Board.shiftWest(kingBitboard) |
+                Board.shiftWest(Board.shiftWest(kingBitboard));
+            const haveIntermediaryCheck = EngineController.areSquaresAttacked(westCastleCheckMask, self.board);
+
+            if (!haveIntermediaryCheck and ~occupiedSquares & westCastleMask == westCastleMask) {
                 const targetSquare: u6 = @intCast(@ctz(Board.shiftWest(Board.shiftWest(kingBitboard))));
                 const move = Move.init(
                     originSquare,
@@ -831,6 +856,13 @@ pub const EngineController = struct {
         self.genBishopMoves(colorToMove);
         self.genQueenMoves(colorToMove);
         self.genKingMoves(colorToMove);
+
+        self.legalMoves.clearRetainingCapacity();
+        for (self.pseudoLegalMoves.items) |move| {
+            if (self.isMoveLegal(move)) {
+                self.legalMoves.append(move) catch unreachable;
+            }
+        }
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
@@ -846,19 +878,17 @@ pub const EngineController = struct {
     }
 
     pub fn perft(self: *EngineController, depth: usize) u32 {
+        if (depth == 0) {
+            return 1;
+        }
+
         var count: u32 = 0;
         self.genMoves();
 
-        if (depth == 1) {
-            return @intCast(self.pseudoLegalMoves.items.len);
-        }
-
         var newEngine = self.copyEmpty();
-        for (self.pseudoLegalMoves.items) |move| {
+        for (self.legalMoves.items) |move| {
             newEngine.board.makeMove(move);
-            if (!EngineController.isKingInCheck(newEngine.board)) {
-                count += newEngine.perft(depth - 1);
-            }
+            count += newEngine.perft(depth - 1);
             newEngine.board.undoMove(move);
         }
         return count;

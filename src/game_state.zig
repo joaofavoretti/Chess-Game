@@ -30,6 +30,9 @@ pub const GameState = struct {
         // board.* = Board.initFromFEN("8/8/2b2b2/8/8/2B2B2/8/8 b KQkq - 0 1");
         // board.* = Board.initFromFEN("8/8/2b2b2/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
 
+        // Perft Tests
+        // board.* = Board.initFromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+
         const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
         player.* = PlayerController.init(render);
 
