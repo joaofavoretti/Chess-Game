@@ -9,6 +9,7 @@ const ss = @import("selected_square.zig");
 const pc = @import("player_controller.zig");
 const ec = @import("engine_controller.zig");
 const gs = @import("game_state.zig");
+const mg = @import("move_gen.zig");
 
 const IVector2 = iv.IVector2;
 const SelectedSquare = ss.SelectedSquare;
@@ -18,6 +19,7 @@ const Board = b.Board;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const MoveCode = m.MoveCode;
+const MoveGen = mg.MoveGen;
 
 pub const PlayerController = struct {
     tileSize: i32,

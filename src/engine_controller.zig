@@ -4,6 +4,7 @@ const p = @import("piece.zig");
 const b = @import("board.zig");
 const r = @import("render.zig");
 const m = @import("move.zig");
+const mg = @import("move_gen.zig");
 const pawnPushUtils = @import("engine_utils/pawn_push.zig");
 const pawnAttackUtils = @import("engine_utils/pawn_attack.zig");
 
@@ -15,6 +16,7 @@ const Piece = p.Piece;
 const PieceColor = p.PieceColor;
 const PieceType = p.PieceType;
 const Bitboard = b.Bitboard;
+const MoveGen = mg.MoveGen;
 
 // Used for reverseBitscan stuff
 const index64: [64]u32 = [_]u32{
@@ -34,11 +36,14 @@ pub const EngineController = struct {
     pseudoLegalMoves: std.ArrayList(Move),
     legalMoves: std.ArrayList(Move),
 
+    moveGen: MoveGen = undefined,
+
     pub fn init(board: *Board) EngineController {
         return EngineController{
             .board = board,
             .pseudoLegalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
             .legalMoves = std.ArrayList(Move).init(std.heap.page_allocator),
+            .moveGen = MoveGen.init(std.heap.page_allocator),
         };
     }
 
@@ -54,6 +59,7 @@ pub const EngineController = struct {
     pub fn deinit(self: *EngineController) void {
         self.pseudoLegalMoves.deinit();
         self.legalMoves.deinit();
+        self.moveGen.deinit();
     }
 
     fn isWhiteOrBlackPromotionSquare(targetSquare: u6) bool {
@@ -847,6 +853,8 @@ pub const EngineController = struct {
     }
 
     pub fn genMoves(self: *EngineController) void {
+        self.moveGen.update(self.board);
+
         self.pseudoLegalMoves.clearRetainingCapacity();
         const colorToMove = self.board.pieceToMove;
         self.genPawnPushes(colorToMove);

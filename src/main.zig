@@ -43,12 +43,12 @@ fn setup() void {
 
     // state.engine.genMoves();
 
-    for (1..5) |i| {
-        var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
-        t.reset();
-        const countPossibleMoves = state.engine.perft(i);
-        std.debug.print("Perft({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
-    }
+    // for (1..5) |i| {
+    //     var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
+    //     t.reset();
+    //     const countPossibleMoves = state.engine.perft(i);
+    //     std.debug.print("Perft({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
+    // }
 }
 
 fn destroy() void {
@@ -82,8 +82,9 @@ fn draw() void {
     }
 
     state.render.drawPieces(state.board);
-    state.render.drawPossibleMoves(state.player);
-    state.render.drawPossibleMovesFromList(&state.engine.pseudoLegalMoves);
+    // state.render.drawPossibleMoves(state.player);
+    // state.render.drawPossibleMovesFromList(&state.engine.pseudoLegalMoves);
+    state.render.drawPossibleMovesFromList(&state.engine.moveGen.pseudoLegalMoves);
 }
 
 pub fn main() !void {
