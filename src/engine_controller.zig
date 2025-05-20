@@ -854,34 +854,17 @@ pub const EngineController = struct {
 
     pub fn genMoves(self: *EngineController) void {
         self.moveGen.update(self.board);
-
-        self.pseudoLegalMoves.clearRetainingCapacity();
-        const colorToMove = self.board.pieceToMove;
-        self.genPawnPushes(colorToMove);
-        self.genPawnAttacks(colorToMove);
-        self.genKnightMoves(colorToMove);
-        self.genRookMoves(colorToMove);
-        self.genBishopMoves(colorToMove);
-        self.genQueenMoves(colorToMove);
-        self.genKingMoves(colorToMove);
-
-        self.legalMoves.clearRetainingCapacity();
-        for (self.pseudoLegalMoves.items) |move| {
-            if (self.isMoveLegal(move)) {
-                self.legalMoves.append(move) catch unreachable;
-            }
-        }
     }
 
     pub fn makeRandomMove(self: *EngineController) void {
-        if (self.pseudoLegalMoves.items.len == 0) {
+        if (self.moveGen.pseudoLegalMoves.items.len == 0) {
             return;
         }
 
         var rng = std.Random.DefaultPrng.init(@as(u64, @intCast(std.time.timestamp())));
         var random = rng.random();
-        const randomIndex = random.uintLessThan(usize, self.pseudoLegalMoves.items.len);
-        const move = self.pseudoLegalMoves.items[randomIndex];
+        const randomIndex = random.uintLessThan(usize, self.moveGen.pseudoLegalMoves.items.len);
+        const move = self.moveGen.pseudoLegalMoves.items[randomIndex];
         self.board.makeMove(move);
     }
 

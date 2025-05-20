@@ -27,6 +27,11 @@ const index64: [64]u32 = [_]u32{
     13, 18, 8,  12, 7,  6,  5,  63,
 };
 
+fn isWhiteOrBlackPromotionSquare(targetSquare: u6) bool {
+    return (targetSquare & 0b111000) == 0b111000 or
+        (targetSquare ^ 0b111000) & 0b111000 == 0b111000;
+}
+
 pub const MoveGen = struct {
     pseudoLegalMoves: std.ArrayList(Move),
 
@@ -36,13 +41,17 @@ pub const MoveGen = struct {
         };
     }
 
-    pub fn update(self: *MoveGen, board: *Board) void {
-        self.pseudoLegalMoves.clearRetainingCapacity();
-        self.genPawnPushes(board);
-    }
-
     pub fn deinit(self: *MoveGen) void {
         self.pseudoLegalMoves.deinit();
+    }
+
+    pub fn clear(self: *MoveGen) void {
+        self.pseudoLegalMoves.clearRetainingCapacity();
+    }
+
+    pub fn update(self: *MoveGen, board: *Board) void {
+        self.clear();
+        self.genPawnPushes(board);
     }
 
     fn genPawnPushes(self: *MoveGen, board: *Board) void {
@@ -81,7 +90,7 @@ pub const MoveGen = struct {
                 .{ .QuietMove = .{} },
             );
 
-            if (MoveGen.isWhiteOrBlackPromotionSquare(targetSquare)) {
+            if (isWhiteOrBlackPromotionSquare(targetSquare)) {
                 move = Move.init(
                     originSquare,
                     targetSquare,
@@ -109,10 +118,5 @@ pub const MoveGen = struct {
             doublePushTarget &= ~(@as(u64, 1) << targetSquare);
             pawnAble2DblPush &= ~(@as(u64, 1) << originSquare);
         }
-    }
-
-    fn isWhiteOrBlackPromotionSquare(targetSquare: u6) bool {
-        return (targetSquare & 0b111000) == 0b111000 or
-            (targetSquare ^ 0b111000) & 0b111000 == 0b111000;
     }
 };

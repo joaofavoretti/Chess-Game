@@ -1,3 +1,4 @@
+tmux.sh
+
 .zig-cache
 zig-out
-./tmux.sh

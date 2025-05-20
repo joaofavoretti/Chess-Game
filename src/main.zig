@@ -72,14 +72,14 @@ fn draw() void {
         state.render.highlightTile(state.player.selectedSquare.square);
     }
 
-    if (state.board.enPassantTarget) |enPassantTarget| {
-        state.render.highlightTile(enPassantTarget);
-    }
+    // if (state.board.enPassantTarget) |enPassantTarget| {
+    //     state.render.highlightTile(enPassantTarget);
+    // }
 
-    if (EngineController.isKingInCheck(state.engine.board)) {
-        const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
-        state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
-    }
+    // if (EngineController.isKingInCheck(state.engine.board)) {
+    //     const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
+    //     state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
+    // }
 
     state.render.drawPieces(state.board);
     // state.render.drawPossibleMoves(state.player);
