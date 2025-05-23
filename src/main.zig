@@ -10,6 +10,7 @@ const ss = @import("selected_square.zig");
 const pc = @import("player_controller.zig");
 const ec = @import("engine_controller.zig");
 const gs = @import("game_state.zig");
+const mg = @import("move_gen.zig");
 
 const IVector2 = iv.IVector2;
 
@@ -41,14 +42,7 @@ var state: GameState = undefined;
 fn setup() void {
     state = GameState.init();
 
-    // state.engine.genMoves();
-
-    // for (1..5) |i| {
-    //     var t = time.Timer.start() catch std.debug.panic("Failed to start timer", .{});
-    //     t.reset();
-    //     const countPossibleMoves = state.engine.perft(i);
-    //     std.debug.print("Perft({}) = {} ({} milliseconds)\n", .{ i, countPossibleMoves, t.read() / time.ns_per_ms });
-    // }
+    state.engine.genMoves();
 }
 
 fn destroy() void {
@@ -62,28 +56,36 @@ fn update(deltaTime: f32) void {
 
     state.player.update(deltaTime, state.render, state.board);
     state.engine.update(deltaTime);
+
+    if (state.player.madeMove()) {
+        state.engine.moveGen.update(state.board);
+    }
+
+    if (state.engine.madeMove()) {
+        state.player.moveGen.update(state.board);
+    }
 }
 
 fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
+
     // state.render.drawSquareNumbers();
+
     if (state.player.selectedSquare.isSelected) {
         state.render.highlightTile(state.player.selectedSquare.square);
     }
 
-    // if (state.board.enPassantTarget) |enPassantTarget| {
-    //     state.render.highlightTile(enPassantTarget);
-    // }
+    if (state.board.enPassantTarget) |enPassantTarget| {
+        state.render.highlightTile(enPassantTarget);
+    }
 
-    // if (EngineController.isKingInCheck(state.engine.board)) {
-    //     const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
-    //     state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
-    // }
+    if (mg.isKingInCheck(state.engine.board)) {
+        const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
+        state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
+    }
 
     state.render.drawPieces(state.board);
-    // state.render.drawPossibleMoves(state.player);
-    // state.render.drawPossibleMovesFromList(&state.engine.pseudoLegalMoves);
     state.render.drawPossibleMovesFromList(&state.engine.moveGen.pseudoLegalMoves);
 }
 

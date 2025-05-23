@@ -42,6 +42,235 @@ fn knightAttacks(knightBitboard: Bitboard) Bitboard {
     return (h1 << 16) | (h1 >> 16) | (h2 << 8) | (h2 >> 8);
 }
 
+fn rankMask(square: u6) Bitboard {
+    return @as(u64, 0b11111111) << @intCast(square & 0b111000);
+}
+
+fn fileMask(square: u6) Bitboard {
+    return @as(u64, 0x0101010101010101) << @intCast(square & 0b111);
+}
+
+fn diagonalMask(square: u6) u64 {
+    const maindia: u64 = 0x8040201008040201;
+    const diag: i32 = @subWithOverflow(@as(i32, square) & 7, @as(i32, square) >> 3)[0];
+    return if (diag >= 0) maindia >> @intCast(diag * 8) else maindia << @intCast(-diag * 8);
+}
+
+fn diagonalMaskEx(square: u6) Bitboard {
+    return (@as(u64, 1) << square) ^ diagonalMask(square);
+}
+
+fn antiDiagonalMask(square: u6) u64 {
+    const maindia: u64 = 0x0102040810204080;
+    const diag: i32 = 7 - (@as(i32, square) & 7) - (@as(i32, square) >> 3);
+    return if (diag >= 0) maindia >> @intCast(diag * 8) else maindia << @intCast(-diag * 8);
+}
+
+fn antiDiagonalMaskEx(sq: u6) u64 {
+    return (@as(u64, 1) << sq) ^ antiDiagonalMask(sq);
+}
+
+fn eastMaskEx(square: u6) Bitboard {
+    return 2 * ((@as(u64, 1) << @intCast(square | 7)) - (@as(u64, 1) << @intCast(square)));
+}
+
+fn nortMaskEx(square: u6) Bitboard {
+    return @as(u64, 0x0101010101010100) << square;
+}
+
+fn westMaskEx(square: u6) Bitboard {
+    const one: Bitboard = 1;
+    return (one << square) - ((one << @intCast(square & 0b111000)));
+}
+
+fn southMaskEx(square: u6) Bitboard {
+    return @as(u64, 0x0080808080808080) >> (square ^ 0b111111);
+}
+
+fn reverseBitscan(bb_: Bitboard) u6 {
+    const debruijn64: u64 = 0x03f79d71b4cb0a89;
+    var bb: Bitboard = bb_;
+    if (bb == 0) return 0;
+    bb |= bb >> 1;
+    bb |= bb >> 2;
+    bb |= bb >> 4;
+    bb |= bb >> 8;
+    bb |= bb >> 16;
+    bb |= bb >> 32;
+    return @intCast(index64[@mulWithOverflow(bb, debruijn64)[0] >> 58]);
+}
+
+fn rookAttacks(rookSquare: u6, sameColorPieces: Bitboard, oppositeColorPieces: Bitboard) Bitboard {
+    const blockers = sameColorPieces | oppositeColorPieces;
+
+    const eastAttacksEmptyBoard = eastMaskEx(rookSquare);
+    const eastAttackBlockers = eastAttacksEmptyBoard & blockers;
+    var eastAttacks = eastAttacksEmptyBoard;
+    if (eastAttackBlockers != 0) {
+        const eastAttackBlockerSquare: u6 = @intCast(@ctz(eastAttackBlockers));
+        eastAttacks = (eastAttacksEmptyBoard ^ eastMaskEx(eastAttackBlockerSquare)) & ~sameColorPieces;
+    }
+
+    const nortAttacksEmptyBoard = nortMaskEx(rookSquare);
+    const nortAttackBlockers = nortAttacksEmptyBoard & blockers;
+    var nortAttacks = nortAttacksEmptyBoard;
+    if (nortAttackBlockers != 0) {
+        const nortAttackBlockerSquare: u6 = @intCast(@ctz(nortAttackBlockers));
+        nortAttacks = (nortAttacksEmptyBoard ^ nortMaskEx(nortAttackBlockerSquare)) & ~sameColorPieces;
+    }
+
+    const westAttacksEmptyBoard = westMaskEx(rookSquare);
+    const westAttackBlockers = westAttacksEmptyBoard & blockers;
+    var westAttacks = westAttacksEmptyBoard;
+    if (westAttackBlockers != 0) {
+        const westAttackBlockerSquare = reverseBitscan(westAttackBlockers);
+        westAttacks = (westAttacksEmptyBoard ^ westMaskEx(westAttackBlockerSquare)) & ~sameColorPieces;
+    }
+
+    const southAttacksEmptyBoard = southMaskEx(rookSquare);
+    const southAttackBlockers = southAttacksEmptyBoard & blockers;
+    var southAttacks = southAttacksEmptyBoard;
+    if (southAttackBlockers != 0) {
+        const southAttackBlockerSquare: u6 = reverseBitscan(southAttackBlockers);
+        southAttacks = (southAttacksEmptyBoard ^ southMaskEx(southAttackBlockerSquare)) & ~sameColorPieces;
+    }
+
+    return eastAttacks | nortAttacks | westAttacks | southAttacks;
+}
+
+fn bishopAttacks(bishopSquare: u6, sameColorPieces: Bitboard, oppositeColorPieces: Bitboard) Bitboard {
+    const blockers = sameColorPieces | oppositeColorPieces;
+
+    const mainDiagonal = diagonalMaskEx(bishopSquare);
+    const antiDiagonal = antiDiagonalMaskEx(bishopSquare);
+
+    const noEastAttackEmptyBoard = mainDiagonal & positiveMask(bishopSquare);
+    const noEastAttackBlockers = noEastAttackEmptyBoard & blockers;
+    var noEastAttacks = noEastAttackEmptyBoard;
+    if (noEastAttackBlockers != 0) {
+        const noEastAttackBlockerSquare: u6 = @intCast(@ctz(noEastAttackBlockers));
+        noEastAttacks = (noEastAttackEmptyBoard ^ (diagonalMaskEx(noEastAttackBlockerSquare) & positiveMask(noEastAttackBlockerSquare))) & ~sameColorPieces;
+    }
+
+    const noWestAttackEmptyBoard = antiDiagonal & positiveMask(bishopSquare);
+    const noWestAttackBlockers = noWestAttackEmptyBoard & blockers;
+    var noWestAttacks = noWestAttackEmptyBoard;
+    if (noWestAttackBlockers != 0) {
+        const noWestAttackBlockerSquare: u6 = @intCast(@ctz(noWestAttackBlockers));
+        noWestAttacks = (noWestAttackEmptyBoard ^ (antiDiagonalMaskEx(noWestAttackBlockerSquare) & positiveMask(noWestAttackBlockerSquare))) & ~sameColorPieces;
+    }
+
+    const soEastAttackEmptyBoard = mainDiagonal & negativeMask(bishopSquare);
+    const soEastAttackBlockers = soEastAttackEmptyBoard & blockers;
+    var soEastAttacks = soEastAttackEmptyBoard;
+    if (soEastAttackBlockers != 0) {
+        const soEastAttackBlockerSquare: u6 = reverseBitscan(soEastAttackBlockers);
+        soEastAttacks = (soEastAttackEmptyBoard ^ (diagonalMaskEx(soEastAttackBlockerSquare) & negativeMask(soEastAttackBlockerSquare))) & ~sameColorPieces;
+    }
+
+    const soWestAttackEmptyBoard = antiDiagonal & negativeMask(bishopSquare);
+    const soWestAttackBlockers = soWestAttackEmptyBoard & blockers;
+    var soWestAttacks = soWestAttackEmptyBoard;
+    if (soWestAttackBlockers != 0) {
+        const soWestAttackBlockerSquare: u6 = reverseBitscan(soWestAttackBlockers);
+        soWestAttacks = (soWestAttackEmptyBoard ^ (antiDiagonalMaskEx(soWestAttackBlockerSquare) & negativeMask(soWestAttackBlockerSquare))) & ~sameColorPieces;
+    }
+
+    return noEastAttacks | noWestAttacks | soEastAttacks | soWestAttacks;
+}
+
+fn positiveMask(square: u6) Bitboard {
+    return @as(u64, @bitCast(@as(i64, -2))) << square;
+}
+
+fn negativeMask(square: u6) Bitboard {
+    return (@as(u64, 1) << square) - 1;
+}
+
+pub fn areSquaresAttacked(bitboard: Bitboard, board: *Board) bool {
+    var bb = bitboard;
+    while (bb != 0) {
+        const square: u6 = @intCast(@ctz(bb));
+        if (isSquareAttacked(square, board)) {
+            return true;
+        }
+        bb &= ~(@as(u64, 1) << square);
+    }
+    return false;
+}
+
+pub fn isSquareAttacked(square: u6, board: *Board) bool {
+    const squareBitboard = @as(u64, 1) << square;
+
+    const colorToMove = board.pieceToMove;
+
+    const opPawnBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Pawn)];
+    const opKnightBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Knight)];
+    const opBishopBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Bishop)];
+    const opRookBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Rook)];
+    const opQueenBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Queen)];
+
+    // Figuring out pawn attacks
+    const pawnCaptureTarget = switch (colorToMove) {
+        PieceColor.White => pawnAttackUtils.blackPawnAnyAttacks(opPawnBitboard),
+        PieceColor.Black => pawnAttackUtils.whitePawnAnyAttacks(opPawnBitboard),
+    };
+
+    if (pawnCaptureTarget & squareBitboard != 0) {
+        return true;
+    }
+
+    if (knightAttacks(squareBitboard) & opKnightBitboard != 0) {
+        return true;
+    }
+
+    const rookAttackTargets = rookAttacks(
+        @intCast(@ctz(squareBitboard)),
+        board.getColorBitboard(colorToMove),
+        board.getColorBitboard(colorToMove.opposite()),
+    );
+    if ((rookAttackTargets & opRookBitboard != 0) or (rookAttackTargets & opQueenBitboard != 0)) {
+        return true;
+    }
+
+    const bishopAttackTargets = bishopAttacks(
+        @intCast(@ctz(squareBitboard)),
+        board.getColorBitboard(colorToMove),
+        board.getColorBitboard(colorToMove.opposite()),
+    );
+    if ((bishopAttackTargets & opBishopBitboard != 0) or (bishopAttackTargets & opQueenBitboard != 0)) {
+        return true;
+    }
+
+    return false;
+}
+
+pub fn isKingInCheck(board: *Board) bool {
+    const kingBitboard = board.boards[@intFromEnum(board.pieceToMove)][@intFromEnum(PieceType.King)];
+
+    if (kingBitboard == 0) {
+        return true;
+    }
+
+    const kingSquare: u6 = @intCast(@ctz(kingBitboard));
+    return isSquareAttacked(kingSquare, board);
+}
+
+fn kingAttacks(kingBitboard: Bitboard) Bitboard {
+    var kingSet = kingBitboard;
+    var attacks = Board.shiftEast(kingSet) | Board.shiftWest(kingSet);
+    kingSet |= attacks;
+    attacks |= Board.shiftNorth(kingSet) | Board.shiftSouth(kingSet);
+    return attacks;
+}
+
+fn isMoveLegal(board: *Board, move: Move) bool {
+    board.makeMove(move);
+    const isLegal = !isKingInCheck(board);
+    board.undoMove(move);
+    return isLegal;
+}
+
 pub const MoveGen = struct {
     pseudoLegalMoves: std.ArrayList(Move),
 
@@ -64,6 +293,10 @@ pub const MoveGen = struct {
         self.genPawnPushes(board);
         self.genPawnAttacks(board);
         self.genKnightMoves(board);
+        self.genRookMoves(board);
+        self.genBishopMoves(board);
+        self.genQueenMoves(board);
+        self.genKingMoves(board);
     }
 
     fn genPawnPushes(self: *MoveGen, board: *Board) void {
@@ -302,6 +535,318 @@ pub const MoveGen = struct {
                 attackTarget &= ~(@as(u64, 1) << targetSquare);
             }
             knightBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
+    fn genRookMoves(self: *MoveGen, board: *Board) void {
+        const colorToMove = board.pieceToMove;
+        var rookBitboard = board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Rook)];
+
+        while (rookBitboard != 0) {
+            const originSquare: u6 = @intCast(@ctz(rookBitboard));
+
+            var attackTarget = rookAttacks(
+                originSquare,
+                board.getColorBitboard(colorToMove),
+                board.getColorBitboard(colorToMove.opposite()),
+            );
+
+            var captureTarget = attackTarget & board.getColorBitboard(colorToMove.opposite());
+
+            attackTarget &= ~captureTarget;
+
+            // Capture moves
+            while (captureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+                const capturedPiece = board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                captureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            // Quiet Moves
+            while (attackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .QuietMove = .{} },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                attackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            rookBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
+    fn genBishopMoves(self: *MoveGen, board: *Board) void {
+        const colorToMove = board.pieceToMove;
+        var bishopBitboard = board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Bishop)];
+
+        while (bishopBitboard != 0) {
+            const originSquare: u6 = @intCast(@ctz(bishopBitboard));
+
+            var attackTarget = bishopAttacks(
+                originSquare,
+                board.getColorBitboard(colorToMove),
+                board.getColorBitboard(colorToMove.opposite()),
+            );
+
+            var captureTarget = attackTarget & board.getColorBitboard(colorToMove.opposite());
+            attackTarget &= ~captureTarget;
+
+            // Capture moves
+            while (captureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+                const capturedPiece = board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                captureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            while (attackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .QuietMove = .{} },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                attackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            bishopBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
+    fn genQueenMoves(self: *MoveGen, board: *Board) void {
+        const colorToMove = board.pieceToMove;
+        var queenBitboard = board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.Queen)];
+
+        while (queenBitboard != 0) {
+            const originSquare: u6 = @intCast(@ctz(queenBitboard));
+
+            var rookAttackTarget = rookAttacks(
+                originSquare,
+                board.getColorBitboard(colorToMove),
+                board.getColorBitboard(colorToMove.opposite()),
+            ) | bishopAttacks(
+                originSquare,
+                board.getColorBitboard(colorToMove),
+                board.getColorBitboard(colorToMove.opposite()),
+            );
+            var rookCaptureTarget = rookAttackTarget & board.getColorBitboard(colorToMove.opposite());
+            rookAttackTarget &= ~rookCaptureTarget;
+
+            // Capture moves
+            while (rookCaptureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(rookCaptureTarget));
+
+                const capturedPiece = board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                rookCaptureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            // Quiet Moves
+            while (rookAttackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(rookAttackTarget));
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .QuietMove = .{} },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                rookAttackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            var bishopAttackTarget = bishopAttacks(
+                originSquare,
+                board.getColorBitboard(colorToMove),
+                board.getColorBitboard(colorToMove.opposite()),
+            );
+            var bishopCaptureTarget = bishopAttackTarget & board.getColorBitboard(colorToMove.opposite());
+            bishopAttackTarget &= ~bishopCaptureTarget;
+
+            // Capture moves
+            while (bishopCaptureTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(bishopCaptureTarget));
+
+                const capturedPiece = board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .Capture = .{ .capturedPiece = capturedPiece } },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                bishopCaptureTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            while (bishopAttackTarget != 0) {
+                const targetSquare: u6 = @intCast(@ctz(bishopAttackTarget));
+
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .QuietMove = .{} },
+                );
+
+                self.pseudoLegalMoves.append(move) catch unreachable;
+
+                bishopAttackTarget &= ~(@as(u64, 1) << targetSquare);
+            }
+
+            queenBitboard &= ~(@as(u64, 1) << originSquare);
+        }
+    }
+
+    fn genKingMoves(self: *MoveGen, board: *Board) void {
+        const colorToMove = board.pieceToMove;
+        const kingBitboard = board.boards[@intFromEnum(colorToMove)][@intFromEnum(PieceType.King)];
+        const availableSquares = ~board.getColorBitboard(colorToMove);
+        const occupiedSquares = board.getColorBitboard(colorToMove) |
+            board.getColorBitboard(colorToMove.opposite());
+
+        if (kingBitboard == 0) {
+            return;
+        }
+
+        // Obtaining king attacks
+        const originSquare: u6 = @intCast(@ctz(kingBitboard));
+        var attackTarget = kingAttacks(kingBitboard) & availableSquares;
+        var captureTarget = attackTarget & board.getColorBitboard(colorToMove.opposite());
+        attackTarget &= ~captureTarget;
+
+        // Capture moves
+        while (captureTarget != 0) {
+            const targetSquare: u6 = @intCast(@ctz(captureTarget));
+
+            const capturedPiece = board.getPieceFromColor(targetSquare, colorToMove.opposite());
+
+            const move = Move.init(
+                originSquare,
+                targetSquare,
+                board,
+                .{ .Capture = .{ .capturedPiece = capturedPiece } },
+            );
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+
+            captureTarget &= ~(@as(u64, 1) << targetSquare);
+        }
+
+        // Quiet Moves
+        while (attackTarget != 0) {
+            const targetSquare: u6 = @intCast(@ctz(attackTarget));
+
+            const move = Move.init(
+                originSquare,
+                targetSquare,
+                board,
+                .{ .QuietMove = .{} },
+            );
+
+            self.pseudoLegalMoves.append(move) catch unreachable;
+
+            attackTarget &= ~(@as(u64, 1) << targetSquare);
+        }
+
+        const castlingRightsMask = switch (colorToMove) {
+            PieceColor.White => @as(u8, 0b00000011),
+            PieceColor.Black => @as(u8, 0b00001100),
+        };
+        const castlingRights = (board.castlingRights & castlingRightsMask) >> @intCast(@ctz(castlingRightsMask));
+
+        if (castlingRights == 0) {
+            return;
+        }
+
+        // Can castle king side - east
+        if (castlingRights & 0b01 != 0) {
+            const eastCastleMask = Board.shiftEast(kingBitboard) |
+                Board.shiftEast(Board.shiftEast(kingBitboard));
+
+            const haveIntermediaryCheck = areSquaresAttacked(
+                eastCastleMask,
+                board,
+            );
+
+            if (!haveIntermediaryCheck and ~occupiedSquares & eastCastleMask == eastCastleMask) {
+                const targetSquare: u6 = @intCast(@ctz(Board.shiftEast(Board.shiftEast(kingBitboard))));
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .KingCastle = .{} },
+                );
+                self.pseudoLegalMoves.append(move) catch unreachable;
+            }
+        }
+
+        // Can castle queen side - west
+        if (castlingRights & 0b10 != 0) {
+            const westCastleMask = Board.shiftWest(kingBitboard) |
+                Board.shiftWest(Board.shiftWest(kingBitboard)) |
+                Board.shiftWest(Board.shiftWest(Board.shiftWest(kingBitboard)));
+
+            const westCastleCheckMask = Board.shiftWest(kingBitboard) |
+                Board.shiftWest(Board.shiftWest(kingBitboard));
+            const haveIntermediaryCheck = areSquaresAttacked(westCastleCheckMask, board);
+
+            if (!haveIntermediaryCheck and ~occupiedSquares & westCastleMask == westCastleMask) {
+                const targetSquare: u6 = @intCast(@ctz(Board.shiftWest(Board.shiftWest(kingBitboard))));
+                const move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .QueenCastle = .{} },
+                );
+                self.pseudoLegalMoves.append(move) catch unreachable;
+            }
         }
     }
 };
