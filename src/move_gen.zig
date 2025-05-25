@@ -187,11 +187,11 @@ fn negativeMask(square: u6) Bitboard {
     return (@as(u64, 1) << square) - 1;
 }
 
-pub fn areSquaresAttacked(bitboard: Bitboard, board: *Board) bool {
+pub fn areSquaresAttacked(bitboard: Bitboard, board: *Board, colorAttacking: PieceColor) bool {
     var bb = bitboard;
     while (bb != 0) {
         const square: u6 = @intCast(@ctz(bb));
-        if (isSquareAttacked(square, board)) {
+        if (isSquareAttacked(square, board, colorAttacking)) {
             return true;
         }
         bb &= ~(@as(u64, 1) << square);
@@ -199,21 +199,31 @@ pub fn areSquaresAttacked(bitboard: Bitboard, board: *Board) bool {
     return false;
 }
 
-pub fn isSquareAttacked(square: u6, board: *Board) bool {
+pub fn isKingInCheck(board: *Board, kingColor: PieceColor) bool {
+    const kingBitboard = board.boards[@intFromEnum(kingColor)][@intFromEnum(PieceType.King)];
+
+    if (kingBitboard == 0) {
+        return true; // No king on the board, considered as in check
+    }
+
+    const kingSquare: u6 = @intCast(@ctz(kingBitboard));
+    return isSquareAttacked(kingSquare, board, kingColor.opposite());
+}
+
+pub fn isSquareAttacked(square: u6, board: *Board, colorAttacking: PieceColor) bool {
     const squareBitboard = @as(u64, 1) << square;
 
-    const colorToMove = board.pieceToMove;
-
-    const opPawnBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Pawn)];
-    const opKnightBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Knight)];
-    const opBishopBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Bishop)];
-    const opRookBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Rook)];
-    const opQueenBitboard = board.boards[@intFromEnum(colorToMove.opposite())][@intFromEnum(PieceType.Queen)];
+    const opPawnBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.Pawn)];
+    const opKnightBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.Knight)];
+    const opBishopBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.Bishop)];
+    const opRookBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.Rook)];
+    const opQueenBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.Queen)];
+    const opKingBitboard = board.boards[@intFromEnum(colorAttacking)][@intFromEnum(PieceType.King)];
 
     // Figuring out pawn attacks
-    const pawnCaptureTarget = switch (colorToMove) {
-        PieceColor.White => pawnAttackUtils.blackPawnAnyAttacks(opPawnBitboard),
-        PieceColor.Black => pawnAttackUtils.whitePawnAnyAttacks(opPawnBitboard),
+    const pawnCaptureTarget = switch (colorAttacking) {
+        PieceColor.White => pawnAttackUtils.whitePawnAnyAttacks(opPawnBitboard),
+        PieceColor.Black => pawnAttackUtils.blackPawnAnyAttacks(opPawnBitboard),
     };
 
     if (pawnCaptureTarget & squareBitboard != 0) {
@@ -226,8 +236,8 @@ pub fn isSquareAttacked(square: u6, board: *Board) bool {
 
     const rookAttackTargets = rookAttacks(
         @intCast(@ctz(squareBitboard)),
-        board.getColorBitboard(colorToMove),
-        board.getColorBitboard(colorToMove.opposite()),
+        board.getColorBitboard(colorAttacking.opposite()),
+        board.getColorBitboard(colorAttacking),
     );
     if ((rookAttackTargets & opRookBitboard != 0) or (rookAttackTargets & opQueenBitboard != 0)) {
         return true;
@@ -235,25 +245,18 @@ pub fn isSquareAttacked(square: u6, board: *Board) bool {
 
     const bishopAttackTargets = bishopAttacks(
         @intCast(@ctz(squareBitboard)),
-        board.getColorBitboard(colorToMove),
-        board.getColorBitboard(colorToMove.opposite()),
+        board.getColorBitboard(colorAttacking.opposite()),
+        board.getColorBitboard(colorAttacking),
     );
     if ((bishopAttackTargets & opBishopBitboard != 0) or (bishopAttackTargets & opQueenBitboard != 0)) {
         return true;
     }
 
-    return false;
-}
-
-pub fn isKingInCheck(board: *Board) bool {
-    const kingBitboard = board.boards[@intFromEnum(board.pieceToMove)][@intFromEnum(PieceType.King)];
-
-    if (kingBitboard == 0) {
+    if (kingAttacks(opKingBitboard) & squareBitboard != 0) {
         return true;
     }
 
-    const kingSquare: u6 = @intCast(@ctz(kingBitboard));
-    return isSquareAttacked(kingSquare, board);
+    return false;
 }
 
 fn kingAttacks(kingBitboard: Bitboard) Bitboard {
@@ -262,13 +265,6 @@ fn kingAttacks(kingBitboard: Bitboard) Bitboard {
     kingSet |= attacks;
     attacks |= Board.shiftNorth(kingSet) | Board.shiftSouth(kingSet);
     return attacks;
-}
-
-fn isMoveLegal(board: *Board, move: Move) bool {
-    board.makeMove(move);
-    const isLegal = !isKingInCheck(board);
-    board.undoMove(move);
-    return isLegal;
 }
 
 pub const MoveGen = struct {
@@ -813,6 +809,7 @@ pub const MoveGen = struct {
             const haveIntermediaryCheck = areSquaresAttacked(
                 eastCastleMask,
                 board,
+                board.pieceToMove.opposite(),
             );
 
             if (!haveIntermediaryCheck and ~occupiedSquares & eastCastleMask == eastCastleMask) {
@@ -835,7 +832,11 @@ pub const MoveGen = struct {
 
             const westCastleCheckMask = Board.shiftWest(kingBitboard) |
                 Board.shiftWest(Board.shiftWest(kingBitboard));
-            const haveIntermediaryCheck = areSquaresAttacked(westCastleCheckMask, board);
+            const haveIntermediaryCheck = areSquaresAttacked(
+                westCastleCheckMask,
+                board,
+                board.pieceToMove.opposite(),
+            );
 
             if (!haveIntermediaryCheck and ~occupiedSquares & westCastleMask == westCastleMask) {
                 const targetSquare: u6 = @intCast(@ctz(Board.shiftWest(Board.shiftWest(kingBitboard))));

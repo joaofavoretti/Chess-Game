@@ -18,10 +18,15 @@ const PieceType = p.PieceType;
 const Bitboard = b.Bitboard;
 const MoveGen = mg.MoveGen;
 
+const TIME_PER_MOVE: f32 = 10.0;
+
 pub const EngineController = struct {
     board: *Board,
-    timeSinceLastMove: f32 = 0,
     moveGen: MoveGen = undefined,
+    _madeMove: bool = false,
+
+    // Used for visual perft testing
+    lastIndexTested: i32 = -1,
 
     pub fn init(board: *Board) EngineController {
         return EngineController{
@@ -33,13 +38,18 @@ pub const EngineController = struct {
     pub fn copyEmpty(self: *EngineController) EngineController {
         return EngineController{
             .board = self.board,
-            .timeSinceLastMove = self.timeSinceLastMove,
             .moveGen = MoveGen.init(std.heap.page_allocator),
         };
     }
 
     pub fn deinit(self: *EngineController) void {
         self.moveGen.deinit();
+    }
+
+    pub fn madeMove(self: *EngineController) bool {
+        const ret = self._madeMove;
+        self._madeMove = false;
+        return ret;
     }
 
     pub fn genMoves(self: *EngineController) void {
@@ -58,20 +68,25 @@ pub const EngineController = struct {
         self.board.makeMove(move);
     }
 
-    pub fn perft(self: *EngineController, depth: usize) u32 {
-        if (depth == 0) {
-            return 1;
-        }
-
-        var count: u32 = 0;
+    pub fn perft(self: *EngineController, depth: usize) usize {
+        var count: usize = 0;
         self.genMoves();
+
+        if (depth == 1) {
+            return self.moveGen.pseudoLegalMoves.items.len;
+        }
 
         var newEngine = self.copyEmpty();
         for (self.moveGen.pseudoLegalMoves.items) |move| {
             newEngine.board.makeMove(move);
-            count += newEngine.perft(depth - 1);
+
+            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove)) {
+                count += newEngine.perft(depth - 1);
+            }
+
             newEngine.board.undoMove(move);
         }
+        newEngine.deinit();
         return count;
     }
 
@@ -80,6 +95,7 @@ pub const EngineController = struct {
 
         if (rl.isKeyPressed(rl.KeyboardKey.space)) {
             self.makeRandomMove();
+            self._madeMove = true;
             self.genMoves();
         }
 
@@ -87,11 +103,23 @@ pub const EngineController = struct {
             self.genMoves();
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
-            if (self.board.lastMoves.pop()) |lastMove| {
+        if (rl.isKeyPressed(rl.KeyboardKey.b)) {
+            if (self.lastIndexTested != -1) {
+                const lastMove = self.moveGen.pseudoLegalMoves.items[@intCast(self.lastIndexTested)];
                 self.board.undoMove(lastMove);
-                self.genMoves();
+                self.lastIndexTested = @mod((self.lastIndexTested - 1), @as(i32, @intCast(self.moveGen.pseudoLegalMoves.items.len)));
             }
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.n)) {
+            if (self.lastIndexTested != -1) {
+                const lastMove = self.moveGen.pseudoLegalMoves.items[@intCast(self.lastIndexTested)];
+                self.board.undoMove(lastMove);
+            }
+
+            self.lastIndexTested = @mod((self.lastIndexTested + 1), @as(i32, @intCast(self.moveGen.pseudoLegalMoves.items.len)));
+            const move = self.moveGen.pseudoLegalMoves.items[@intCast(self.lastIndexTested)];
+            self.board.makeMove(move);
         }
     }
 };

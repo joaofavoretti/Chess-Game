@@ -22,16 +22,16 @@ const MoveCode = m.MoveCode;
 const MoveGen = mg.MoveGen;
 
 pub const PlayerController = struct {
-    tileSize: i32,
-    offset: IVector2,
     selectedSquare: SelectedSquare = SelectedSquare.init(),
     moveGen: MoveGen,
+    board: *Board,
+    render: *Render,
     _madeMove: bool = false,
 
-    pub fn init(baseRender: *Render) PlayerController {
+    pub fn init(board: *Board, render: *Render) PlayerController {
         return PlayerController{
-            .tileSize = baseRender.tileSize,
-            .offset = baseRender.offset,
+            .board = board,
+            .render = render,
             .moveGen = MoveGen.init(std.heap.page_allocator),
         };
     }
@@ -40,26 +40,28 @@ pub const PlayerController = struct {
         self.moveGen.deinit();
     }
 
-    fn genMoves(self: *PlayerController, board: *Board) void {
-        self.moveGen.update(board);
+    pub fn genMoves(self: *PlayerController) void {
+        self.moveGen.update(self.board);
     }
 
-    fn updateBoardInteraction(self: *PlayerController, render: *Render, board: *Board) void {
+    fn updateBoardInteraction(self: *PlayerController) void {
         if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
             if (self.isMouseOverBoard()) {
                 const pos = self.getMousePosition();
-                const square = render.getSquareFromPos(pos);
+                const square = self.render.getSquareFromPos(pos);
 
                 if (self.selectedSquare.isSelected) {
                     if (self.selectedSquare.square == square) {
                         self.selectedSquare.clear();
                     }
 
+                    std.debug.print("Number of possible moves to chose from: {}\n", .{self.moveGen.pseudoLegalMoves.items.len});
+
                     for (self.moveGen.pseudoLegalMoves.items) |move| {
                         if (move.from == self.selectedSquare.square and move.to == square) {
-                            board.makeMove(move);
+                            self.board.makeMove(move);
                             self.selectedSquare.clear();
-                            self.genMoves(board);
+                            self.genMoves();
                             self._madeMove = true;
                             return;
                         }
@@ -76,22 +78,22 @@ pub const PlayerController = struct {
 
     pub fn madeMove(self: *PlayerController) bool {
         const ret = self._madeMove;
-        self.madeMove = false;
+        self._madeMove = false;
         return ret;
     }
 
-    pub fn update(self: *PlayerController, deltaTime: f32, render: *Render, board: *Board) void {
+    pub fn update(self: *PlayerController, deltaTime: f32) void {
         _ = deltaTime;
 
-        self.updateBoardInteraction(render, board);
+        self.updateBoardInteraction();
     }
 
     fn isMouseOverBoard(self: *PlayerController) bool {
         const mousePos = IVector2.fromVector2(rl.getMousePosition());
-        return (mousePos.x >= self.offset.x and
-            mousePos.x < self.offset.x + self.tileSize * 8 and
-            mousePos.y >= self.offset.y and
-            mousePos.y < self.offset.y + self.tileSize * 8);
+        return (mousePos.x >= self.render.offset.x and
+            mousePos.x < self.render.offset.x + self.render.tileSize * 8 and
+            mousePos.y >= self.render.offset.y and
+            mousePos.y < self.render.offset.y + self.render.tileSize * 8);
     }
 
     fn getMousePosition(self: *PlayerController) IVector2 {
@@ -100,8 +102,8 @@ pub const PlayerController = struct {
         }
 
         const mousePos = IVector2.fromVector2(rl.getMousePosition());
-        const x = @as(u6, @intCast(@divFloor(mousePos.x - self.offset.x, self.tileSize)));
-        const y = @as(u6, @intCast(@divFloor(mousePos.y - self.offset.y, self.tileSize)));
+        const x = @as(u6, @intCast(@divFloor(mousePos.x - self.render.offset.x, self.render.tileSize)));
+        const y = @as(u6, @intCast(@divFloor(mousePos.y - self.render.offset.y, self.render.tileSize)));
         return IVector2.init(x, y);
     }
 };

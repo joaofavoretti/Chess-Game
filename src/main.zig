@@ -43,6 +43,11 @@ fn setup() void {
     state = GameState.init();
 
     state.engine.genMoves();
+    state.player.genMoves();
+
+    for (1..4) |i| {
+        std.debug.print("Perft {}: {}\n", .{ i, state.engine.perft(i) });
+    }
 }
 
 fn destroy() void {
@@ -54,15 +59,23 @@ fn update(deltaTime: f32) void {
         state.render.inverted = !state.render.inverted;
     }
 
-    state.player.update(deltaTime, state.render, state.board);
+    if (rl.isKeyPressed(rl.KeyboardKey.u)) {
+        if (state.board.lastMoves.pop()) |lastMove| {
+            state.board.undoMove(lastMove);
+            state.engine.genMoves();
+            state.player.genMoves();
+        }
+    }
+
+    state.player.update(deltaTime);
     state.engine.update(deltaTime);
 
     if (state.player.madeMove()) {
-        state.engine.moveGen.update(state.board);
+        state.engine.genMoves();
     }
 
     if (state.engine.madeMove()) {
-        state.player.moveGen.update(state.board);
+        state.player.genMoves();
     }
 }
 
@@ -80,10 +93,18 @@ fn draw() void {
         state.render.highlightTile(enPassantTarget);
     }
 
-    if (mg.isKingInCheck(state.engine.board)) {
+    // Highlight if the king is in check (still does not work)
+    if (mg.isKingInCheck(state.engine.board, state.engine.board.pieceToMove)) {
         const kingSquare = state.board.boards[@intFromEnum(state.board.pieceToMove)][@intFromEnum(PieceType.King)];
         state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
     }
+
+    // Highlight all the squares that are attacked (Not optimized on purpose)
+    // for (0..64) |square| {
+    //     if (mg.isSquareAttacked(@intCast(square), state.board, state.board.pieceToMove)) {
+    //         state.render.highlightTileColor(@intCast(square), rl.Color.red);
+    //     }
+    // }
 
     state.render.drawPieces(state.board);
     state.render.drawPossibleMovesFromList(&state.engine.moveGen.pseudoLegalMoves);

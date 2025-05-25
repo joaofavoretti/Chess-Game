@@ -25,7 +25,7 @@ pub const GameState = struct {
         board.* = GameState.initCustomBoard();
 
         const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
-        player.* = PlayerController.init(render);
+        player.* = PlayerController.init(board, render);
 
         const engine = std.heap.c_allocator.create(EngineController) catch std.debug.panic("Failed to allocate EngineController", .{});
         engine.* = EngineController.init(board);
@@ -60,8 +60,7 @@ pub const GameState = struct {
         // return Board.initFromFEN("8/8/2b2b2/8/8/2B2B2/8/8 b KQkq - 0 1");
         // return Board.initFromFEN("8/8/2b2b2/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
 
-        // Perft Tests
+        // Position 2
         // return Board.initFromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
-
     }
 };

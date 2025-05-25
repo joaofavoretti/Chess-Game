@@ -272,7 +272,7 @@ pub const Board = struct {
                 for (0..2) |i| { // 0 = King-side, 1 = Queen-side
                     const rookSquare = rookSquares[i];
                     if (move.to == rookSquare) {
-                        std.log.info("Updating the castling rights according to the captured rook", .{});
+                        // std.log.info("Updating the castling rights according to the captured rook", .{});
                         // Update the castling rights to remove the side of the rook
                         castlingRights &= @as(u4, 0b0001) << @intCast(1 - i);
                         board.castlingRights &= (castlingRights << shiftAmount) | opositeCastlingRightsMask;
