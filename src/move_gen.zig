@@ -332,11 +332,32 @@ pub const MoveGen = struct {
             );
 
             if (isWhiteOrBlackPromotionSquare(targetSquare)) {
-                move = Move.init(
+                self.pseudoLegalMoves.append(Move.init(
                     originSquare,
                     targetSquare,
                     board,
                     .{ .QueenPromotion = .{} },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .BishopPromotion = .{} },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .KnightPromotion = .{} },
+                )) catch unreachable;
+
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .RookPromotion = .{} },
                 );
             }
 
@@ -417,11 +438,38 @@ pub const MoveGen = struct {
             }
 
             if (isWhiteOrBlackPromotionSquare(targetSquare)) {
-                move = Move.init(
+                self.pseudoLegalMoves.append(Move.init(
                     originSquare,
                     targetSquare,
                     board,
                     .{ .QueenPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .BishopPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .KnightPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .RookPromotionCapture = .{
                         .capturedPiece = capturedPiece,
                     } },
                 );
@@ -468,11 +516,38 @@ pub const MoveGen = struct {
 
             // Capture with promotion
             if (isWhiteOrBlackPromotionSquare(targetSquare)) {
-                move = Move.init(
+                self.pseudoLegalMoves.append(Move.init(
                     originSquare,
                     targetSquare,
                     board,
                     .{ .QueenPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .BishopPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                self.pseudoLegalMoves.append(Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .KnightPromotionCapture = .{
+                        .capturedPiece = capturedPiece,
+                    } },
+                )) catch unreachable;
+
+                move = Move.init(
+                    originSquare,
+                    targetSquare,
+                    board,
+                    .{ .RookPromotionCapture = .{
                         .capturedPiece = capturedPiece,
                     } },
                 );
@@ -653,10 +728,6 @@ pub const MoveGen = struct {
                 originSquare,
                 board.getColorBitboard(colorToMove),
                 board.getColorBitboard(colorToMove.opposite()),
-            ) | bishopAttacks(
-                originSquare,
-                board.getColorBitboard(colorToMove),
-                board.getColorBitboard(colorToMove.opposite()),
             );
             var rookCaptureTarget = rookAttackTarget & board.getColorBitboard(colorToMove.opposite());
             rookAttackTarget &= ~rookCaptureTarget;
@@ -806,8 +877,11 @@ pub const MoveGen = struct {
             const eastCastleMask = Board.shiftEast(kingBitboard) |
                 Board.shiftEast(Board.shiftEast(kingBitboard));
 
+            const eastCastleCheckMask = Board.shiftEast(kingBitboard) |
+                Board.shiftEast(Board.shiftEast(kingBitboard)) | kingBitboard;
+
             const haveIntermediaryCheck = areSquaresAttacked(
-                eastCastleMask,
+                eastCastleCheckMask,
                 board,
                 board.pieceToMove.opposite(),
             );
@@ -831,7 +905,7 @@ pub const MoveGen = struct {
                 Board.shiftWest(Board.shiftWest(Board.shiftWest(kingBitboard)));
 
             const westCastleCheckMask = Board.shiftWest(kingBitboard) |
-                Board.shiftWest(Board.shiftWest(kingBitboard));
+                Board.shiftWest(Board.shiftWest(kingBitboard)) | kingBitboard;
             const haveIntermediaryCheck = areSquaresAttacked(
                 westCastleCheckMask,
                 board,

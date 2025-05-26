@@ -69,18 +69,18 @@ pub const EngineController = struct {
     }
 
     pub fn perft(self: *EngineController, depth: usize) usize {
+        if (depth == 0) {
+            return 1;
+        }
+
         var count: usize = 0;
         self.genMoves();
-
-        if (depth == 1) {
-            return self.moveGen.pseudoLegalMoves.items.len;
-        }
 
         var newEngine = self.copyEmpty();
         for (self.moveGen.pseudoLegalMoves.items) |move| {
             newEngine.board.makeMove(move);
 
-            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove)) {
+            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove.opposite())) {
                 count += newEngine.perft(depth - 1);
             }
 
@@ -88,6 +88,35 @@ pub const EngineController = struct {
         }
         newEngine.deinit();
         return count;
+    }
+
+    pub fn divide(self: *EngineController, depth: usize) void {
+        if (depth < 1) {
+            std.debug.print("Divide only allowed for depth >= 1\n", .{});
+        }
+
+        self.genMoves();
+        var newEngine = self.copyEmpty();
+        std.debug.print("Perft {}\n", .{depth - 1});
+        for (self.moveGen.pseudoLegalMoves.items) |move| {
+            newEngine.board.makeMove(move);
+
+            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove.opposite())) {
+                const count = newEngine.perft(depth - 1);
+                if (move.getCode().isPromotion()) {
+                    std.debug.print("{s}{s}: {}\n", .{
+                        move.getMoveName(),
+                        move.getPromotionPieceType().getName(),
+                        count,
+                    });
+                } else {
+                    std.debug.print("{s}: {}\n", .{ move.getMoveName(), count });
+                }
+            }
+
+            newEngine.board.undoMove(move);
+        }
+        newEngine.deinit();
     }
 
     pub fn update(self: *EngineController, deltaTime: f32) void {
@@ -117,9 +146,17 @@ pub const EngineController = struct {
                 self.board.undoMove(lastMove);
             }
 
-            self.lastIndexTested = @mod((self.lastIndexTested + 1), @as(i32, @intCast(self.moveGen.pseudoLegalMoves.items.len)));
-            const move = self.moveGen.pseudoLegalMoves.items[@intCast(self.lastIndexTested)];
-            self.board.makeMove(move);
+            while (true) {
+                self.lastIndexTested = @mod((self.lastIndexTested + 1), @as(i32, @intCast(self.moveGen.pseudoLegalMoves.items.len)));
+                const move = self.moveGen.pseudoLegalMoves.items[@intCast(self.lastIndexTested)];
+                self.board.makeMove(move);
+
+                if (mg.isKingInCheck(self.board, self.board.pieceToMove.opposite())) {
+                    self.board.undoMove(move);
+                } else {
+                    break;
+                }
+            }
         }
     }
 };

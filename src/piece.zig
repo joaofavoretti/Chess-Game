@@ -7,6 +7,17 @@ pub const PieceType = enum {
     Rook,
     Queen,
     King,
+
+    pub fn getName(pieceType: PieceType) [1]u8 {
+        const pieceChar: u8 = switch (pieceType) {
+            PieceType.Knight => 'n',
+            PieceType.Bishop => 'b',
+            PieceType.Rook => 'r',
+            PieceType.Queen => 'q',
+            else => ' ',
+        };
+        return [_]u8{pieceChar};
+    }
 };
 pub const PieceTypeLength = @typeInfo(PieceType).@"enum".fields.len;
 

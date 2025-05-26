@@ -61,8 +61,15 @@ pub const PlayerController = struct {
                         if (move.from == self.selectedSquare.square and move.to == square) {
                             self.board.makeMove(move);
                             self.selectedSquare.clear();
-                            self.genMoves();
-                            self._madeMove = true;
+
+                            if (mg.isKingInCheck(self.board, self.board.pieceToMove.opposite())) {
+                                self.board.undoMove(move);
+                            } else {
+                                std.debug.print("Move made: {s}\n", .{move.getMoveName()});
+                                self.genMoves();
+                                self._madeMove = true;
+                            }
+
                             return;
                         }
                     }

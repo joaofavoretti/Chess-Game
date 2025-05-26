@@ -48,6 +48,7 @@ fn setup() void {
     for (1..4) |i| {
         std.debug.print("Perft {}: {}\n", .{ i, state.engine.perft(i) });
     }
+    // state.engine.divide(1);
 }
 
 fn destroy() void {
@@ -67,6 +68,14 @@ fn update(deltaTime: f32) void {
         }
     }
 
+    if (rl.isKeyPressed(rl.KeyboardKey.m)) {
+        state.showSquareNumbers = !state.showSquareNumbers;
+    }
+
+    if (rl.isKeyPressed(rl.KeyboardKey.a)) {
+        state.showAttackedSquares = !state.showAttackedSquares;
+    }
+
     state.player.update(deltaTime);
     state.engine.update(deltaTime);
 
@@ -83,8 +92,6 @@ fn draw() void {
     rl.clearBackground(rl.Color.init(48, 46, 43, 255));
     state.render.drawBoard();
 
-    // state.render.drawSquareNumbers();
-
     if (state.player.selectedSquare.isSelected) {
         state.render.highlightTile(state.player.selectedSquare.square);
     }
@@ -100,14 +107,20 @@ fn draw() void {
     }
 
     // Highlight all the squares that are attacked (Not optimized on purpose)
-    // for (0..64) |square| {
-    //     if (mg.isSquareAttacked(@intCast(square), state.board, state.board.pieceToMove)) {
-    //         state.render.highlightTileColor(@intCast(square), rl.Color.red);
-    //     }
-    // }
+    if (state.showAttackedSquares) {
+        for (0..64) |square| {
+            if (mg.isSquareAttacked(@intCast(square), state.board, state.board.pieceToMove)) {
+                state.render.highlightTileColor(@intCast(square), rl.Color.red);
+            }
+        }
+    }
 
     state.render.drawPieces(state.board);
     state.render.drawPossibleMovesFromList(&state.engine.moveGen.pseudoLegalMoves);
+
+    if (state.showSquareNumbers) {
+        state.render.drawSquareNumbers();
+    }
 }
 
 pub fn main() !void {

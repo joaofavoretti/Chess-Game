@@ -69,6 +69,13 @@ pub const MoveProps = union(MoveCode) {
     },
 };
 
+pub fn getSquareName(square: u6) [2]u8 {
+    const file: u8 = @intCast(square % 8);
+    const rank: u8 = @intCast(square / 8);
+
+    return [_]u8{ 'a' + file, '1' + rank };
+}
+
 pub const Move = struct {
     // Basic move data
     from: u6,
@@ -114,6 +121,26 @@ pub const Move = struct {
             MoveCode.RookPromotionCapture => self.props.RookPromotionCapture.capturedPiece,
             MoveCode.QueenPromotionCapture => self.props.QueenPromotionCapture.capturedPiece,
             else => Piece.initInvalid(),
+        };
+    }
+
+    pub fn getPromotionPieceType(self: *const Move) PieceType {
+        return switch (self.getCode()) {
+            MoveCode.KnightPromotion, MoveCode.KnightPromotionCapture => PieceType.Knight,
+            MoveCode.BishopPromotion, MoveCode.BishopPromotionCapture => PieceType.Bishop,
+            MoveCode.RookPromotion, MoveCode.RookPromotionCapture => PieceType.Rook,
+            MoveCode.QueenPromotion, MoveCode.QueenPromotionCapture => PieceType.Queen,
+            else => unreachable, // Invalid promotion
+        };
+    }
+
+    pub fn getMoveName(self: *const Move) [4]u8 {
+        const fromSquare = getSquareName(self.from);
+        const toSquare = getSquareName(self.to);
+
+        return [_]u8{
+            fromSquare[0], fromSquare[1],
+            toSquare[0],   toSquare[1],
         };
     }
 
