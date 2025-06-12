@@ -9,6 +9,7 @@ const ss = @import("selected_square.zig");
 const pc = @import("player_controller.zig");
 const ec = @import("engine_controller.zig");
 const gs = @import("game_state.zig");
+const mg = @import("move_gen.zig");
 
 const PieceColorLength = pi.PieceColorLength;
 const PieceTypeLength = pi.PieceTypeLength;
@@ -17,6 +18,7 @@ const PieceColor = pi.PieceColor;
 const Piece = pi.Piece;
 const Move = m.Move;
 const MoveCode = m.MoveCode;
+const MoveGen = m.MoveGen;
 
 pub const Bitboard = u64;
 
@@ -31,6 +33,7 @@ pub const Board = struct {
     halfMoveClock: u8,
     fullMoveNumber: u8,
     lastMoves: std.ArrayList(Move),
+    moveGen: MoveGen = undefined,
 
     pub fn setPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
         const one: u64 = 1;

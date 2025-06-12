@@ -12,22 +12,22 @@ const EngineController = ec.EngineController;
 const MoveGen = mg.MoveGen;
 
 pub const GameState = struct {
-    render: *Render,
+    // render: *Render,
     board: *Board,
-    player: *PlayerController,
+    // player: *PlayerController,
     engine: *EngineController,
-    showSquareNumbers: bool = false,
-    showAttackedSquares: bool = false,
+    // showSquareNumbers: bool = false,
+    // showAttackedSquares: bool = false,
 
     pub fn init() GameState {
-        const render = std.heap.c_allocator.create(Render) catch std.debug.panic("Failed to allocate Render", .{});
-        render.* = Render.init();
+        // const render = std.heap.c_allocator.create(Render) catch std.debug.panic("Failed to allocate Render", .{});
+        // render.* = Render.init();
 
         const board = std.heap.c_allocator.create(Board) catch std.debug.panic("Failed to allocate Board", .{});
         board.* = GameState.initCustomBoard();
 
-        const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
-        player.* = PlayerController.init(board, render);
+        // const player = std.heap.c_allocator.create(PlayerController) catch std.debug.panic("Failed to allocate PlayerController", .{});
+        // player.* = PlayerController.init(board, render);
 
         const engine = std.heap.c_allocator.create(EngineController) catch std.debug.panic("Failed to allocate EngineController", .{});
         engine.* = EngineController.init(board);
@@ -41,13 +41,13 @@ pub const GameState = struct {
     }
 
     pub fn deinit(self: *GameState) void {
-        self.render.deinit();
+        // self.render.deinit();
         self.board.deinit();
-        self.player.deinit();
+        // self.player.deinit();
         self.engine.deinit();
-        std.heap.c_allocator.destroy(self.render);
+        // std.heap.c_allocator.destroy(self.render);
         std.heap.c_allocator.destroy(self.board);
-        std.heap.c_allocator.destroy(self.player);
+        // std.heap.c_allocator.destroy(self.player);
         std.heap.c_allocator.destroy(self.engine);
     }
 

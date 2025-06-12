@@ -45,7 +45,7 @@ pub const Render = struct {
         return texture;
     }
 
-    pub fn init() Render {
+    pub fn init(board: *Board) Render {
         const screenWidth = @as(i32, @intCast(rl.getScreenWidth()));
         const screenHeight = @as(i32, @intCast(rl.getScreenHeight()));
         const tileSize = @divTrunc(@min(screenWidth, screenHeight), 8);

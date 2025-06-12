@@ -13,28 +13,20 @@ const gs = @import("game_state.zig");
 const mg = @import("move_gen.zig");
 
 const IVector2 = iv.IVector2;
-
 const PieceType = p.PieceType;
 const PieceTypeLength = p.PieceTypeLength;
 const PieceColor = p.PieceColor;
 const PieceColorLength = p.PieceColorLength;
 const Piece = p.Piece;
-
 const Bitboard = b.Bitboard;
 const Board = b.Board;
-
 const MoveCode = m.MoveCode;
 const MoveProps = m.MoveProps;
 const Move = m.Move;
-
 const Render = r.Render;
-
 const SelectedSquare = ss.SelectedSquare;
-
 const PlayerController = pc.PlayerController;
-
 const EngineController = ec.EngineController;
-
 const GameState = gs.GameState;
 
 var state: GameState = undefined;
