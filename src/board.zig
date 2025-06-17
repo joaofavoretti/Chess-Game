@@ -18,7 +18,7 @@ const PieceColor = pi.PieceColor;
 const Piece = pi.Piece;
 const Move = m.Move;
 const MoveCode = m.MoveCode;
-const MoveGen = m.MoveGen;
+const MoveGen = mg.MoveGen;
 
 pub const Bitboard = u64;
 
