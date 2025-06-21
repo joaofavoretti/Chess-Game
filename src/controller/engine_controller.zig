@@ -5,8 +5,6 @@ const b = @import("board.zig");
 const r = @import("render.zig");
 const m = @import("move.zig");
 const mg = @import("move_gen.zig");
-const pawnPushUtils = @import("engine_utils/pawn_push.zig");
-const pawnAttackUtils = @import("engine_utils/pawn_attack.zig");
 
 const Board = b.Board;
 const Render = r.Render;
@@ -66,57 +64,6 @@ pub const EngineController = struct {
         const randomIndex = random.uintLessThan(usize, self.moveGen.pseudoLegalMoves.items.len);
         const move = self.moveGen.pseudoLegalMoves.items[randomIndex];
         self.board.makeMove(move);
-    }
-
-    pub fn perft(self: *EngineController, depth: usize) usize {
-        if (depth == 0) {
-            return 1;
-        }
-
-        var count: usize = 0;
-        self.genMoves();
-
-        var newEngine = self.copyEmpty();
-        for (self.moveGen.pseudoLegalMoves.items) |move| {
-            newEngine.board.makeMove(move);
-
-            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove.opposite())) {
-                count += newEngine.perft(depth - 1);
-            }
-
-            newEngine.board.undoMove(move);
-        }
-        newEngine.deinit();
-        return count;
-    }
-
-    pub fn divide(self: *EngineController, depth: usize) void {
-        if (depth < 1) {
-            std.debug.print("Divide only allowed for depth >= 1\n", .{});
-        }
-
-        self.genMoves();
-        var newEngine = self.copyEmpty();
-        std.debug.print("Perft {}\n", .{depth - 1});
-        for (self.moveGen.pseudoLegalMoves.items) |move| {
-            newEngine.board.makeMove(move);
-
-            if (!mg.isKingInCheck(newEngine.board, newEngine.board.pieceToMove.opposite())) {
-                const count = newEngine.perft(depth - 1);
-                if (move.getCode().isPromotion()) {
-                    std.debug.print("{s}{s}: {}\n", .{
-                        move.getMoveName(),
-                        move.getPromotionPieceType().getName(),
-                        count,
-                    });
-                } else {
-                    std.debug.print("{s}: {}\n", .{ move.getMoveName(), count });
-                }
-            }
-
-            newEngine.board.undoMove(move);
-        }
-        newEngine.deinit();
     }
 
     pub fn update(self: *EngineController, deltaTime: f32) void {

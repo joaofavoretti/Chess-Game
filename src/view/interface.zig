@@ -36,6 +36,8 @@ pub const Interface = struct {
     selectedBoard: ?*Board,
     boards: []const *Board,
     state: GameState = undefined,
+    showSquareNumbers: bool = false,
+    showAttackedSquares: bool = false,
 
     pub fn init(boards: []const *Board) Interface {
         if (boards.len == 0) {

@@ -15,6 +15,15 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    // Core library module
+    const core_mod = b.createModule(.{
+        // This module is used to build the core library, which is a static library.
+        // It will be linked into the executable later.
+        .root_source_file = b.path("src/core/core.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
         // `root_source_file` is the Zig "entry point" of the module. If a module
@@ -26,13 +35,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    exe_mod.addImport("core", core_mod);
+
+    const core = b.addLibrary(.{
+        .linkage = .static,
+        .name = "core",
+        .root_module = core_mod,
+    });
+
+    b.installArtifact(core);
+
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
     const exe = b.addExecutable(.{
         .name = "Chess_Game",
         .root_module = exe_mod,
-        // .use_llvm = false,
-        // .use_lld = false,
+        .use_llvm = false,
+        .use_lld = false,
     });
 
     const raylib_dep = b.dependency("raylib_zig", .{
@@ -84,6 +103,14 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    // Creates a step for unit testing. This only builds the test executable
+    // but does not run it.
+    const core_unit_tests = b.addTest(.{
+        .root_module = core_mod,
+    });
+
+    const run_core_unit_tests = b.addRunArtifact(core_unit_tests);
+
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,
     });
@@ -94,5 +121,6 @@ pub fn build(b: *std.Build) void {
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_core_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
 }

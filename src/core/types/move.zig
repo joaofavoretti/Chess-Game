@@ -1,18 +1,16 @@
 const std = @import("std");
-const iv = @import("ivector.zig");
-const p = @import("piece.zig");
-const b = @import("board.zig");
+const types = @import("types.zig");
+const core = @import("../core.zig");
 
-const IVector2 = iv.IVector2;
+const IVector2 = types.IVector2;
+const PieceType = types.PieceType;
+const PieceTypeLength = types.PieceTypeLength;
+const PieceColor = types.PieceColor;
+const PieceColorLength = types.PieceColorLength;
+const Piece = types.Piece;
+const Bitboard = types.Bitboard;
 
-const PieceType = p.PieceType;
-const PieceTypeLength = p.PieceTypeLength;
-const PieceColor = p.PieceColor;
-const PieceColorLength = p.PieceColorLength;
-const Piece = p.Piece;
-
-const Bitboard = b.Bitboard;
-const Board = b.Board;
+const Board = core.Board;
 
 pub const MoveCode = enum(u4) {
     // Bits: Promotion, Capture, Special 1, Special 2

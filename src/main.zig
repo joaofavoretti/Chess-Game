@@ -1,8 +1,4 @@
-const i = @import("interface.zig");
+const std = @import("std");
+const core = @import("core");
 
-const Interface = i.Interface;
-
-pub fn main() !void {
-    var interface = Interface.init(&.{});
-    interface.run();
-}
+pub fn main() !void {}

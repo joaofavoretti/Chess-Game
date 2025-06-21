@@ -1,29 +1,16 @@
 const std = @import("std");
-const rl = @import("raylib");
-const iv = @import("ivector.zig");
-const pi = @import("piece.zig");
-const b = @import("board.zig");
-const m = @import("move.zig");
-const r = @import("render.zig");
-const ss = @import("selected_square.zig");
-const pc = @import("player_controller.zig");
-const ec = @import("engine_controller.zig");
-const gs = @import("game_state.zig");
-const mg = @import("move_gen.zig");
+const types = @import("types/types.zig");
+const core = @import("core.zig");
 
-const PieceColorLength = pi.PieceColorLength;
-const PieceTypeLength = pi.PieceTypeLength;
-const PieceType = pi.PieceType;
-const PieceColor = pi.PieceColor;
-const Piece = pi.Piece;
-const Move = m.Move;
-const MoveCode = m.MoveCode;
-const MoveGen = mg.MoveGen;
-
-pub const Bitboard = u64;
-
-const notAFile: Bitboard = 0xfefefefefefefefe; // ~0x0101010101010101
-const notHFile: Bitboard = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
+const PieceColorLength = types.PieceColorLength;
+const PieceTypeLength = types.PieceTypeLength;
+const PieceType = types.PieceType;
+const PieceColor = types.PieceColor;
+const Piece = types.Piece;
+const Move = types.Move;
+const MoveCode = types.MoveCode;
+const MoveGen = core.MoveGen;
+const Bitboard = types.Bitboard;
 
 pub const Board = struct {
     boards: [PieceColorLength][PieceTypeLength]Bitboard,
@@ -33,77 +20,16 @@ pub const Board = struct {
     halfMoveClock: u8,
     fullMoveNumber: u8,
     lastMoves: std.ArrayList(Move),
-    moveGen: MoveGen = undefined,
 
-    pub fn setPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
-        const one: u64 = 1;
-        const setMask = one << square;
-        const updatedBitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] | setMask;
-        self.boards[@intFromEnum(color)][@intFromEnum(piece)] = updatedBitboard;
-    }
-
-    pub fn clearPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
-        const one: u64 = 1;
-        const clearMask = one << square;
-        const updatedBitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] & ~clearMask;
-        self.boards[@intFromEnum(color)][@intFromEnum(piece)] = updatedBitboard;
-    }
-
-    pub fn getColorBitboard(self: *Board, color: PieceColor) Bitboard {
-        var colorBitboard: Bitboard = 0;
-        inline for (0..PieceTypeLength) |p| {
-            colorBitboard |= self.boards[@as(usize, @intFromEnum(color))][p];
-        }
-        return colorBitboard;
-    }
-
-    pub fn shiftNorth(bitboard: Bitboard) Bitboard {
-        return bitboard << 8;
-    }
-
-    pub fn shiftSouth(bitboard: Bitboard) Bitboard {
-        return bitboard >> 8;
-    }
-
-    pub fn shiftEast(bitboard: Bitboard) Bitboard {
-        return (bitboard & notHFile) << 1;
-    }
-
-    pub fn shiftNortheast(bitboard: Bitboard) Bitboard {
-        return (bitboard & notHFile) << 9;
-    }
-
-    pub fn shiftSoutheast(bitboard: Bitboard) Bitboard {
-        return (bitboard & notHFile) >> 7;
-    }
-
-    pub fn shiftWest(bitboard: Bitboard) Bitboard {
-        return (bitboard & notAFile) >> 1;
-    }
-
-    pub fn shiftSouthwest(bitboard: Bitboard) Bitboard {
-        return (bitboard & notAFile) >> 9;
-    }
-
-    pub fn shiftNorthwest(bitboard: Bitboard) Bitboard {
-        return (bitboard & notAFile) << 7;
+    pub fn init() Board {
+        return Board.initFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
 
     pub fn deinit(self: *Board) void {
         self.lastMoves.deinit();
     }
 
-    pub fn getEmptySquares(self: *Board) Bitboard {
-        var emptySquares: Bitboard = 0;
-        inline for (0..PieceColorLength) |c| {
-            inline for (0..PieceTypeLength) |p| {
-                emptySquares |= self.boards[c][p];
-            }
-        }
-        return ~emptySquares;
-    }
-
-    pub fn initFromFEN(fen: []const u8) Board {
+    pub fn initFEN(fen: []const u8) Board {
         var tokenizer = std.mem.tokenizeAny(u8, fen, " ");
         const piecePlacement = tokenizer.next() orelse @panic("Invalid FEN: missing piece placement");
         const activeColor = tokenizer.next() orelse @panic("Invalid FEN: missing active color");
@@ -163,8 +89,40 @@ pub const Board = struct {
         return board;
     }
 
+    pub fn setPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
+        const one: u64 = 1;
+        const setMask = one << square;
+        const updatedBitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] | setMask;
+        self.boards[@intFromEnum(color)][@intFromEnum(piece)] = updatedBitboard;
+    }
+
+    pub fn clearPiece(self: *Board, color: PieceColor, piece: PieceType, square: u6) void {
+        const one: u64 = 1;
+        const clearMask = one << square;
+        const updatedBitboard = self.boards[@as(usize, @intFromEnum(color))][@as(usize, @intFromEnum(piece))] & ~clearMask;
+        self.boards[@intFromEnum(color)][@intFromEnum(piece)] = updatedBitboard;
+    }
+
+    pub fn getColorBitboard(self: *Board, color: PieceColor) Bitboard {
+        var colorBitboard: Bitboard = 0;
+        inline for (0..PieceTypeLength) |p| {
+            colorBitboard |= self.boards[@as(usize, @intFromEnum(color))][p];
+        }
+        return colorBitboard;
+    }
+
+    pub fn getEmptySquares(self: *Board) Bitboard {
+        var emptySquares: Bitboard = 0;
+        inline for (0..PieceColorLength) |c| {
+            inline for (0..PieceTypeLength) |p| {
+                emptySquares |= self.boards[c][p];
+            }
+        }
+        return ~emptySquares;
+    }
+
     pub fn parseSquare(square: []const u8) u6 {
-        if (square.len != 2) @panic("Invalid square format");
+        if (square.len != 2) @panic("Square string has more than 2 chars");
         const file = square[0] - 'a';
         const rank = square[1] - '1';
         return @intCast(rank * 8 + file);
