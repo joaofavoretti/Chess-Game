@@ -24,6 +24,17 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // View library module
+    const view_mod = b.createModule(.{
+        // This module is used to build the core library, which is a static library.
+        // It will be linked into the executable later.
+        .root_source_file = b.path("src/view/view.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    view_mod.addImport("core", core_mod);
+
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
         // `root_source_file` is the Zig "entry point" of the module. If a module
@@ -36,6 +47,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe_mod.addImport("core", core_mod);
+    exe_mod.addImport("view", view_mod);
 
     const core = b.addLibrary(.{
         .linkage = .static,
@@ -43,7 +55,14 @@ pub fn build(b: *std.Build) void {
         .root_module = core_mod,
     });
 
+    const view = b.addLibrary(.{
+        .linkage = .static,
+        .name = "view",
+        .root_module = view_mod,
+    });
+
     b.installArtifact(core);
+    b.installArtifact(view);
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
@@ -62,6 +81,9 @@ pub fn build(b: *std.Build) void {
     const raylib = raylib_dep.module("raylib"); // main raylib module
     const raygui = raylib_dep.module("raygui"); // raygui module
     const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
+
+    view_mod.addImport("raylib", raylib);
+    view_mod.addImport("raygui", raygui);
 
     exe.linkLibrary(raylib_artifact);
     exe.root_module.addImport("raylib", raylib);
@@ -111,6 +133,12 @@ pub fn build(b: *std.Build) void {
 
     const run_core_unit_tests = b.addRunArtifact(core_unit_tests);
 
+    const view_unit_tests = b.addTest(.{
+        .root_module = view_mod,
+    });
+
+    const run_view_unit_tests = b.addRunArtifact(view_unit_tests);
+
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,
     });
@@ -122,5 +150,6 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_core_unit_tests.step);
+    test_step.dependOn(&run_view_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
 }

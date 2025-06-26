@@ -1,143 +1,59 @@
 const std = @import("std");
-const time = std.time;
+const core = @import("core");
+const view = @import("view.zig");
 const rl = @import("raylib");
-const iv = @import("ivector.zig");
-const p = @import("piece.zig");
-const b = @import("board.zig");
-const m = @import("move.zig");
-const r = @import("render.zig");
-const ss = @import("selected_square.zig");
-const pc = @import("player_controller.zig");
-const ec = @import("engine_controller.zig");
-const gs = @import("game_state.zig");
-const mg = @import("move_gen.zig");
+const time = std.time;
 
-const IVector2 = iv.IVector2;
-const PieceType = p.PieceType;
-const PieceTypeLength = p.PieceTypeLength;
-const PieceColor = p.PieceColor;
-const PieceColorLength = p.PieceColorLength;
-const Piece = p.Piece;
-const Bitboard = b.Bitboard;
-const Board = b.Board;
-const MoveCode = m.MoveCode;
-const MoveProps = m.MoveProps;
-const Move = m.Move;
-const Render = r.Render;
-const SelectedSquare = ss.SelectedSquare;
-const PlayerController = pc.PlayerController;
-const EngineController = ec.EngineController;
-const GameState = gs.GameState;
+const IVector2 = core.types.IVector2;
+const PieceType = core.types.PieceType;
+const PieceTypeLength = core.types.PieceTypeLength;
+const PieceColor = core.types.PieceColor;
+const PieceColorLength = core.types.PieceColorLength;
+const Piece = core.types.Piece;
+const Bitboard = core.types.Bitboard;
+const Board = core.Board;
+const MoveCode = core.types.MoveCode;
+const MoveProps = core.types.MoveProps;
+const Move = core.types.Move;
+const Render = view.Render;
+const SelectedSquare = core.types.SelectedSquare;
 
-const screenWidth = 960;
-const screenHeight = 720;
+const SCREEN_WIDTH = 960;
+const SCREEN_HEIGHT = 720;
 
 pub const Interface = struct {
-    selectedBoard: ?*Board,
-    boards: []const *Board,
-    state: GameState = undefined,
-    showSquareNumbers: bool = false,
+    board: *Board,
+    render: Render = undefined,
+    showSquareNumbers: bool = true,
     showAttackedSquares: bool = false,
 
-    pub fn init(boards: []const *Board) Interface {
-        if (boards.len == 0) {
-            return Interface{
-                .selectedBoard = null,
-                .boards = boards,
-            };
-        }
-
+    pub fn init(board: *Board) Interface {
         return Interface{
-            .selectedBoard = boards[0],
-            .boards = boards,
+            .board = board,
         };
     }
 
-    fn setup(self: *Interface) void {
-        self.state = GameState.init();
-
-        self.state.engine.genMoves();
-        self.state.player.genMoves();
-
-        for (1..4) |i| {
-            std.debug.print("Perft {}: {}\n", .{ i, self.state.engine.perft(i) });
-        }
-        // state.engine.divide(1);
+    fn deinit(self: *Interface) void {
+        self.render.deinit();
     }
 
-    fn destroy(self: *Interface) void {
-        for (self.boards) |board| {
-            board.deinit();
-        }
-
-        self.state.deinit();
+    fn setup(self: *Interface) void {
+        self.render = Render.init();
     }
 
     fn update(self: *Interface, deltaTime: f32) void {
-        if (rl.isKeyPressed(rl.KeyboardKey.r)) {
-            self.state.render.inverted = !self.state.render.inverted;
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
-            if (self.state.board.lastMoves.pop()) |lastMove| {
-                self.state.board.undoMove(lastMove);
-                self.state.engine.genMoves();
-                self.state.player.genMoves();
-            }
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.m)) {
-            self.state.showSquareNumbers = !self.state.showSquareNumbers;
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.a)) {
-            self.state.showAttackedSquares = !self.state.showAttackedSquares;
-        }
-
-        self.state.player.update(deltaTime);
-        self.state.engine.update(deltaTime);
-
-        if (self.state.player.madeMove()) {
-            self.state.engine.genMoves();
-        }
-
-        if (self.state.engine.madeMove()) {
-            self.state.player.genMoves();
-        }
+        _ = self;
+        _ = deltaTime;
     }
 
     fn draw(self: *Interface) void {
         rl.clearBackground(rl.Color.init(48, 46, 43, 255));
-        self.state.render.drawBoard();
+        self.render.drawBoard();
 
-        if (self.state.player.selectedSquare.isSelected) {
-            self.state.render.highlightTile(self.state.player.selectedSquare.square);
-        }
+        self.render.drawPieces(self.board);
 
-        if (self.state.board.enPassantTarget) |enPassantTarget| {
-            self.state.render.highlightTile(enPassantTarget);
-        }
-
-        // Highlight if the king is in check (still does not work)
-        if (mg.isKingInCheck(self.state.engine.board, self.state.engine.board.pieceToMove)) {
-            const kingSquare = self.state.board.boards[@intFromEnum(self.state.board.pieceToMove)][@intFromEnum(PieceType.King)];
-            self.state.render.highlightTileColor(@intCast(@ctz(kingSquare)), rl.Color.red);
-        }
-
-        // Highlight all the squares that are attacked (Not optimized on purpose)
-        if (self.state.showAttackedSquares) {
-            for (0..64) |square| {
-                if (mg.isSquareAttacked(@intCast(square), self.state.board, self.state.board.pieceToMove)) {
-                    self.state.render.highlightTileColor(@intCast(square), rl.Color.red);
-                }
-            }
-        }
-
-        self.state.render.drawPieces(self.state.board);
-        self.state.render.drawPossibleMovesFromList(&self.state.engine.moveGen.pseudoLegalMoves);
-
-        if (self.state.showSquareNumbers) {
-            self.state.render.drawSquareNumbers();
+        if (self.showSquareNumbers) {
+            self.render.drawSquareNumbers();
         }
     }
 
@@ -145,7 +61,7 @@ pub const Interface = struct {
         rl.setConfigFlags(rl.ConfigFlags{
             .msaa_4x_hint = true,
         });
-        rl.initWindow(screenWidth, screenHeight, "Chess");
+        rl.initWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Chess");
         defer rl.closeWindow();
         rl.initAudioDevice();
         defer rl.closeAudioDevice();
@@ -153,7 +69,7 @@ pub const Interface = struct {
         rl.setTargetFPS(60);
 
         self.setup();
-        defer self.destroy();
+        defer self.deinit();
 
         while (!rl.windowShouldClose()) {
             const deltaTime: f32 = rl.getFrameTime();
@@ -165,3 +81,7 @@ pub const Interface = struct {
         }
     }
 };
+
+comptime {
+    _ = @import("test.zig");
+}

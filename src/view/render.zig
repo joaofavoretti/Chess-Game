@@ -1,21 +1,16 @@
 const std = @import("std");
+const core = @import("core");
 const rl = @import("raylib");
-const iv = @import("ivector.zig");
-const p = @import("piece.zig");
-const b = @import("board.zig");
-const m = @import("move.zig");
-const pc = @import("player_controller.zig");
 
-const PieceColorLength = p.PieceColorLength;
-const PieceTypeLength = p.PieceTypeLength;
-const PieceType = p.PieceType;
-const PieceColor = p.PieceColor;
-const Piece = p.Piece;
-const IVector2 = iv.IVector2;
-const PlayerController = pc.PlayerController;
-const Board = b.Board;
-const Bitboard = b.Bitboard;
-const Move = m.Move;
+const PieceColorLength = core.types.PieceColorLength;
+const PieceTypeLength = core.types.PieceTypeLength;
+const PieceType = core.types.PieceType;
+const PieceColor = core.types.PieceColor;
+const Piece = core.types.Piece;
+const IVector2 = core.types.IVector2;
+const Board = core.Board;
+const Bitboard = core.types.Bitboard;
+const Move = core.types.Move;
 
 const TEXTURE_ASSET_PATH = "./assets/pieces/default";
 const TEXTURE_DEFAULT_PATH = TEXTURE_ASSET_PATH ++ "/Default.png";
@@ -45,6 +40,9 @@ pub const Render = struct {
         return texture;
     }
 
+    // TODO: Add parameters
+    // offset: Ivector2
+    // size: u32
     pub fn init() Render {
         const screenWidth = @as(i32, @intCast(rl.getScreenWidth()));
         const screenHeight = @as(i32, @intCast(rl.getScreenHeight()));
@@ -166,38 +164,6 @@ pub const Render = struct {
         }
     }
 
-    pub fn drawPossibleMoves(self: *Render, controller: *PlayerController) void {
-        const radius = @divTrunc(self.tileSize, 6);
-        const padding = @divTrunc(self.tileSize - radius * 2, 2);
-
-        const moves = controller.pseudoLegalMoves.constSlice();
-
-        for (0..moves.len) |i| {
-            const move: Move = moves[i];
-            const square = move.to;
-            const pos = self.getPosFromSquare(square);
-
-            const center = rl.Vector2.init(
-                @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize + padding + radius)),
-                @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
-            );
-
-            if (move.getCode().isCapture()) {
-                const size = @as(f32, @floatFromInt(self.tileSize));
-                const rect = rl.Rectangle{
-                    .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
-                    .y = @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)) + 6.0,
-                    .width = size - 12.0,
-                    .height = size - 12.0,
-                };
-
-                rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
-            } else {
-                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
-            }
-        }
-    }
-
     pub fn drawPossibleMovesFromList(self: *Render, moves: *std.ArrayList(Move)) void {
         const radius = @divTrunc(self.tileSize, 6);
         const padding = @divTrunc(self.tileSize - radius * 2, 2);
@@ -283,17 +249,6 @@ pub const Render = struct {
         const origin = rl.Vector2.init(0, 0);
 
         rl.drawTexturePro(texture, source, dest, origin, 0.0, rl.Color.white);
-    }
-
-    fn countTrailingZeros(x: u64) u6 {
-        var count: u6 = 0;
-        var x_ = x;
-        while (x_ != 0) {
-            if ((x_ & 1) == 1) break;
-            count += 1;
-            x_ >>= 1;
-        }
-        return count;
     }
 
     pub fn drawPieces(self: *Render, board: *Board) void {

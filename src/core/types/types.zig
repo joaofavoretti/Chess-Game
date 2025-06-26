@@ -3,6 +3,7 @@ pub const IVector2 = vector.IVector2;
 
 const basic = @import("basic.zig");
 pub const Bitboard = basic.Bitboard;
+pub const SelectedSquare = basic.SelectedSquare;
 
 const piece = @import("piece.zig");
 pub const Piece = piece.Piece;
