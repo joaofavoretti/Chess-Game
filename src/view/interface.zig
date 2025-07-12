@@ -2,6 +2,7 @@ const std = @import("std");
 const core = @import("core");
 const view = @import("view.zig");
 const rl = @import("raylib");
+const controller = @import("controller");
 const time = std.time;
 
 const IVector2 = core.types.IVector2;
@@ -17,24 +18,28 @@ const MoveProps = core.types.MoveProps;
 const Move = core.types.Move;
 const Render = view.Render;
 const SelectedSquare = core.types.SelectedSquare;
+const GameController = controller.GameController;
 
 const SCREEN_WIDTH = 960;
 const SCREEN_HEIGHT = 720;
 
 pub const Interface = struct {
     board: *Board,
-    render: Render = undefined,
-    showSquareNumbers: bool = true,
+    gameController: GameController,
+    render: Render = undefined, // Render is purposely undefined because it is started in the setup function
+    showSquareNumbers: bool = false,
     showAttackedSquares: bool = false,
 
     pub fn init(board: *Board) Interface {
         return Interface{
             .board = board,
+            .gameController = GameController.init(board),
         };
     }
 
-    fn deinit(self: *Interface) void {
+    pub fn deinit(self: *Interface) void {
         self.render.deinit();
+        self.gameController.deinit();
     }
 
     fn setup(self: *Interface) void {
@@ -42,8 +47,11 @@ pub const Interface = struct {
     }
 
     fn update(self: *Interface, deltaTime: f32) void {
-        _ = self;
-        _ = deltaTime;
+        self.gameController.update(deltaTime);
+
+        if (rl.isKeyPressed(rl.KeyboardKey.f1)) {
+            self.showSquareNumbers = !self.showSquareNumbers;
+        }
     }
 
     fn draw(self: *Interface) void {

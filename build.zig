@@ -23,6 +23,17 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    //
+    // Controller library module
+    const controller_mod = b.createModule(.{
+        // This module is used to build the core library, which is a static library.
+        // It will be linked into the executable later.
+        .root_source_file = b.path("src/controller/controller.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    controller_mod.addImport("core", core_mod);
 
     // View library module
     const view_mod = b.createModule(.{
@@ -34,6 +45,7 @@ pub fn build(b: *std.Build) void {
     });
 
     view_mod.addImport("core", core_mod);
+    view_mod.addImport("controller", controller_mod);
 
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
@@ -48,6 +60,7 @@ pub fn build(b: *std.Build) void {
 
     exe_mod.addImport("core", core_mod);
     exe_mod.addImport("view", view_mod);
+    exe_mod.addImport("controller", controller_mod);
 
     const core = b.addLibrary(.{
         .linkage = .static,
@@ -61,7 +74,14 @@ pub fn build(b: *std.Build) void {
         .root_module = view_mod,
     });
 
+    const controller = b.addLibrary(.{
+        .linkage = .static,
+        .name = "controller",
+        .root_module = controller_mod,
+    });
+
     b.installArtifact(core);
+    b.installArtifact(controller);
     b.installArtifact(view);
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
@@ -133,6 +153,12 @@ pub fn build(b: *std.Build) void {
 
     const run_core_unit_tests = b.addRunArtifact(core_unit_tests);
 
+    const controller_unit_tests = b.addTest(.{
+        .root_module = controller_mod,
+    });
+
+    const run_controller_unit_tests = b.addRunArtifact(controller_unit_tests);
+
     const view_unit_tests = b.addTest(.{
         .root_module = view_mod,
     });
@@ -150,6 +176,7 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_core_unit_tests.step);
+    test_step.dependOn(&run_controller_unit_tests.step);
     test_step.dependOn(&run_view_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
 }
