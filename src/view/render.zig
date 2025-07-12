@@ -40,9 +40,6 @@ pub const Render = struct {
         return texture;
     }
 
-    // TODO: Add parameters
-    // offset: Ivector2
-    // size: u32
     pub fn init() Render {
         const screenWidth = @as(i32, @intCast(rl.getScreenWidth()));
         const screenHeight = @as(i32, @intCast(rl.getScreenHeight()));
@@ -77,6 +74,27 @@ pub const Render = struct {
     fn isWhiteTile(self: *Render, square: u6) bool {
         const pos = self.getPosFromSquare(square);
         return (@mod((pos.x + pos.y), 2) == 1);
+    }
+
+    pub fn isMouseOverBoard(self: *Render) bool {
+        const rlPos = rl.getMousePosition();
+        const mousePos = IVector2.fromVector2(core.types.Vector2.init(rlPos.x, rlPos.y));
+        return (mousePos.x >= self.offset.x and
+            mousePos.x < self.offset.x + self.tileSize * 8 and
+            mousePos.y >= self.offset.y and
+            mousePos.y < self.offset.y + self.tileSize * 8);
+    }
+
+    pub fn getMousePosition(self: *Render) IVector2 {
+        if (!self.isMouseOverBoard()) {
+            return IVector2.init(0, 0);
+        }
+
+        const rlPos = rl.getMousePosition();
+        const mousePos = IVector2.fromVector2(core.types.Vector2.init(rlPos.x, rlPos.y));
+        const x = @as(u6, @intCast(@divFloor(mousePos.x - self.offset.x, self.tileSize)));
+        const y = @as(u6, @intCast(@divFloor(mousePos.y - self.offset.y, self.tileSize)));
+        return IVector2.init(x, y);
     }
 
     pub fn isPosValid(_: *Render, pos: IVector2) bool {

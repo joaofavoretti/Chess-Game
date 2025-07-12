@@ -25,15 +25,17 @@ const SCREEN_HEIGHT = 720;
 
 pub const Interface = struct {
     board: *Board,
-    gameController: GameController,
-    render: Render = undefined, // Render is purposely undefined because it is started in the setup function
+
     showSquareNumbers: bool = false,
     showAttackedSquares: bool = false,
+
+    // Variables defined under setup
+    gameController: GameController = undefined,
+    render: Render = undefined,
 
     pub fn init(board: *Board) Interface {
         return Interface{
             .board = board,
-            .gameController = GameController.init(board),
         };
     }
 
@@ -44,6 +46,7 @@ pub const Interface = struct {
 
     fn setup(self: *Interface) void {
         self.render = Render.init();
+        self.gameController = GameController.init(self.board);
     }
 
     fn update(self: *Interface, deltaTime: f32) void {
@@ -51,6 +54,16 @@ pub const Interface = struct {
 
         if (rl.isKeyPressed(rl.KeyboardKey.f1)) {
             self.showSquareNumbers = !self.showSquareNumbers;
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.f2)) {
+            self.render.inverted = !self.render.inverted;
+        }
+
+        if (rl.isMouseButtonPressed(rl.MouseButton.left) and self.render.isMouseOverBoard()) {
+            const pos = self.render.getMousePosition();
+            const square = self.render.getSquareFromPos(pos);
+            self.gameController.onSquareClick(square);
         }
     }
 

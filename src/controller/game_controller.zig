@@ -47,9 +47,9 @@ pub const GameController = struct {
         }
     }
 
-    fn onSquareClick(self: *GameController, square: core.types.IVector2) void {
+    pub fn onSquareClick(self: *GameController, square: u6) void {
         _ = self;
-        _ = square;
+        std.debug.print("Handling square click for square: {}\n", .{square});
         // Handle square click events
         // This could involve selecting a piece, moving a piece, etc.
     }
