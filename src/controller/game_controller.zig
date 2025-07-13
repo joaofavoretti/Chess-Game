@@ -16,12 +16,26 @@ const PlayerType = enum {
 
 pub const GameController = struct {
     board: *core.Board,
-    state: GameState = .AwaitingInput,
+    state: GameState,
+    selectedSquare: core.types.SelectedSquare,
+    moveGen: core.MoveGen,
 
     pub fn init(board: *core.Board) GameController {
         return GameController{
             .board = board,
+            .state = .AwaitingInput,
+            .selectedSquare = core.types.SelectedSquare.init(),
+            .moveGen = core.MoveGen.init(std.heap.page_allocator),
         };
+    }
+
+    pub fn setup(self: *GameController) void {
+        self.moveGen.update(self.board);
+    }
+
+    pub fn deinit(self: *GameController) void {
+        self.moveGen.deinit();
+        // Cleanup resources if necessary
     }
 
     pub fn update(self: *GameController, deltaTime: f32) void {
@@ -47,16 +61,48 @@ pub const GameController = struct {
         }
     }
 
-    pub fn onSquareClick(self: *GameController, square: u6) void {
-        _ = self;
-        std.debug.print("Handling square click for square: {}\n", .{square});
-        // Handle square click events
-        // This could involve selecting a piece, moving a piece, etc.
+    pub fn undoLastMove(self: *GameController) void {
+        std.log.info("Undoing last move", .{});
+        const lastMove = self.board.lastMoves.pop();
+        if (lastMove) |move| {
+            self.board.undoMove(move);
+            self.moveGen.update(self.board);
+            std.log.info("Last move undone: {s}", .{move.getMoveName()});
+        } else {
+            std.log.warn("No moves to undo", .{});
+        }
     }
 
-    pub fn deinit(self: *GameController) void {
-        _ = self;
+    pub fn onSquareClick(self: *GameController, square: u6) void {
+        std.log.info("Handling square click for square: {}", .{square});
 
-        // Cleanup resources if necessary
+        if (self.selectedSquare.isSelected) {
+            if (self.selectedSquare.square == square) {
+                self.selectedSquare.clear();
+                return;
+            }
+
+            for (self.moveGen.pseudoLegalMoves.items) |move| {
+                if (move.from == self.selectedSquare.square and move.to == square) {
+                    self.board.makeMove(move);
+
+                    if (core.utils.check.isKingInCheck(self.board, self.board.pieceToMove.opposite())) {
+                        self.board.undoMove(move);
+                    } else {
+                        std.debug.print("Move made: {s}\n", .{move.getMoveName()});
+                    }
+
+                    self.moveGen.update(self.board);
+
+                    self.selectedSquare.clear();
+
+                    return;
+                }
+            }
+
+            self.selectedSquare.setSquare(square);
+        } else {
+            self.selectedSquare.setSquare(square);
+        }
     }
 };

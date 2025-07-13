@@ -182,32 +182,45 @@ pub const Render = struct {
         }
     }
 
-    pub fn drawPossibleMovesFromList(self: *Render, moves: *std.ArrayList(Move)) void {
+    fn drawPossibleMove(self: *Render, move: *Move) void {
+        const square = move.to;
+        const pos = self.getPosFromSquare(square);
+
         const radius = @divTrunc(self.tileSize, 6);
         const padding = @divTrunc(self.tileSize - radius * 2, 2);
 
+        const center = rl.Vector2.init(
+            @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize + padding + radius)),
+            @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
+        );
+
+        if (move.getCode().isCapture()) {
+            const size = @as(f32, @floatFromInt(self.tileSize));
+            const rect = rl.Rectangle{
+                .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
+                .y = @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)) + 6.0,
+                .width = size - 12.0,
+                .height = size - 12.0,
+            };
+
+            rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+        } else {
+            rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+        }
+    }
+
+    pub fn drawPossibleMoves(self: *Render, moves: *std.ArrayList(Move)) void {
         for (0..moves.items.len) |i| {
-            const move: Move = moves.items[i];
-            const square = move.to;
-            const pos = self.getPosFromSquare(square);
+            var move: Move = moves.items[i];
+            self.drawPossibleMove(&move);
+        }
+    }
 
-            const center = rl.Vector2.init(
-                @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize + padding + radius)),
-                @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize + padding + radius)),
-            );
-
-            if (move.getCode().isCapture()) {
-                const size = @as(f32, @floatFromInt(self.tileSize));
-                const rect = rl.Rectangle{
-                    .x = @as(f32, @floatFromInt(self.offset.x + pos.x * self.tileSize)) + 6.0,
-                    .y = @as(f32, @floatFromInt(self.offset.y + pos.y * self.tileSize)) + 6.0,
-                    .width = size - 12.0,
-                    .height = size - 12.0,
-                };
-
-                rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
-            } else {
-                rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+    pub fn drawPossibleMovesFromSquare(self: *Render, moves: *std.ArrayList(Move), square: u6) void {
+        for (0..moves.items.len) |i| {
+            var move: Move = moves.items[i];
+            if (move.from == square) {
+                self.drawPossibleMove(&move);
             }
         }
     }
@@ -231,9 +244,6 @@ pub const Render = struct {
 
     pub fn highlightTileColor(self: *Render, square: u6, color: rl.Color) void {
         const pos = self.getPosFromSquare(square);
-
-        const c = rl.Color.init(color.r, color.g, color.b, 50);
-
         const x = self.offset.x + pos.x * self.tileSize;
         const y = self.offset.y + pos.y * self.tileSize;
 
@@ -242,7 +252,7 @@ pub const Render = struct {
             y,
             self.tileSize,
             self.tileSize,
-            c,
+            color,
         );
     }
 

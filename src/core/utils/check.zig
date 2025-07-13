@@ -41,6 +41,14 @@ pub fn isKingInCheck(board: *Board, kingColor: PieceColor) bool {
     return isSquareAttacked(kingSquare, board, kingColor.opposite());
 }
 
+pub fn getKingSquare(board: *Board, kingColor: PieceColor) u6 {
+    const kingBitboard = board.boards[@intFromEnum(kingColor)][@intFromEnum(PieceType.King)];
+    if (kingBitboard == 0) {
+        return 0; // No king on the board, return an invalid square
+    }
+    return @intCast(@ctz(kingBitboard));
+}
+
 pub fn isSquareAttacked(square: u6, board: *Board, colorAttacking: PieceColor) bool {
     const squareBitboard = @as(u64, 1) << square;
 

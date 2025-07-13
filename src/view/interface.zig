@@ -23,11 +23,14 @@ const GameController = controller.GameController;
 const SCREEN_WIDTH = 960;
 const SCREEN_HEIGHT = 720;
 
+const CHECK_HIGHLIGHT_COLOR = rl.Color.init(0xD3, 0x2F, 0x2F, 0xFF);
+
 pub const Interface = struct {
     board: *Board,
 
     showSquareNumbers: bool = false,
-    showAttackedSquares: bool = false,
+    showAllPossibleMoves: bool = false,
+    showPiecePossibleMoves: bool = true,
 
     // Variables defined under setup
     gameController: GameController = undefined,
@@ -47,6 +50,7 @@ pub const Interface = struct {
     fn setup(self: *Interface) void {
         self.render = Render.init();
         self.gameController = GameController.init(self.board);
+        self.gameController.setup();
     }
 
     fn update(self: *Interface, deltaTime: f32) void {
@@ -57,7 +61,19 @@ pub const Interface = struct {
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.f2)) {
+            self.showAllPossibleMoves = !self.showAllPossibleMoves;
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.f3)) {
+            self.showPiecePossibleMoves = !self.showPiecePossibleMoves;
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.f4)) {
             self.render.inverted = !self.render.inverted;
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.u)) {
+            self.gameController.undoLastMove();
         }
 
         if (rl.isMouseButtonPressed(rl.MouseButton.left) and self.render.isMouseOverBoard()) {
@@ -71,10 +87,33 @@ pub const Interface = struct {
         rl.clearBackground(rl.Color.init(48, 46, 43, 255));
         self.render.drawBoard();
 
+        if (self.gameController.selectedSquare.isSelected) {
+            self.render.highlightTile(self.gameController.selectedSquare.square);
+        }
+
+        if (core.utils.check.isKingInCheck(self.board, self.board.pieceToMove)) {
+            const kingSquare = core.utils.check.getKingSquare(self.board, self.board.pieceToMove);
+            self.render.highlightTileColor(
+                kingSquare,
+                CHECK_HIGHLIGHT_COLOR,
+            );
+        }
+
         self.render.drawPieces(self.board);
 
         if (self.showSquareNumbers) {
             self.render.drawSquareNumbers();
+        }
+
+        if (self.showAllPossibleMoves) {
+            self.render.drawPossibleMoves(&self.gameController.moveGen.pseudoLegalMoves);
+        }
+
+        if (self.showPiecePossibleMoves and self.gameController.selectedSquare.isSelected) {
+            self.render.drawPossibleMovesFromSquare(
+                &self.gameController.moveGen.pseudoLegalMoves,
+                self.gameController.selectedSquare.square,
+            );
         }
     }
 
