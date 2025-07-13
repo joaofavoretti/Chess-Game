@@ -63,7 +63,3 @@ test "Position 6" {
         try testing.expectEqual(expected, result);
     }
 }
-
-// TODO: Use the Chess960 Perft Result CSV
-// CSV lib: https://github.com/beho/zig-csv
-test "Batch Test" {}
