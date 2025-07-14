@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const rl = @import("raylib");
+const colors = @import("colors.zig");
 
 const PieceColorLength = core.types.PieceColorLength;
 const PieceTypeLength = core.types.PieceTypeLength;
@@ -16,12 +17,6 @@ const TEXTURE_ASSET_PATH = "./assets/pieces/default";
 const TEXTURE_DEFAULT_PATH = TEXTURE_ASSET_PATH ++ "/Default.png";
 
 pub const Render = struct {
-    WHITE_TILE_COLOR: rl.Color = rl.Color.init(235, 236, 208, 255),
-    BLACK_TILE_COLOR: rl.Color = rl.Color.init(115, 149, 82, 255),
-    ACTIVE_WHITE_TILE_COLOR: rl.Color = rl.Color.init(245, 246, 130, 255),
-    ACTIVE_BLACK_TILE_COLOR: rl.Color = rl.Color.init(185, 202, 67, 255),
-    POSSIBLE_MOVE_COLOR: rl.Color = rl.Color.init(0, 0, 0, 30),
-
     textures: [PieceColorLength][PieceTypeLength]rl.Texture2D,
     tileSize: i32,
     offset: IVector2,
@@ -138,11 +133,11 @@ pub const Render = struct {
                 const x = self.offset.x + i_ * self.tileSize;
                 const y = self.offset.y + j_ * self.tileSize;
 
-                var color = self.BLACK_TILE_COLOR;
+                var color = colors.TILE_BLACK;
 
                 const square = @as(u6, @intCast(j_ * 8 + i_));
                 if (self.isWhiteTile(square)) {
-                    color = self.WHITE_TILE_COLOR;
+                    color = colors.TILE_WHITE;
                 }
 
                 rl.drawRectangle(
@@ -203,9 +198,9 @@ pub const Render = struct {
                 .height = size - 12.0,
             };
 
-            rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, self.POSSIBLE_MOVE_COLOR);
+            rl.drawRectangleRoundedLinesEx(rect, 16.0, 16, 6.0, colors.MARKER);
         } else {
-            rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), self.POSSIBLE_MOVE_COLOR);
+            rl.drawCircleV(center, @as(f32, @floatFromInt(radius)), colors.MARKER);
         }
     }
 
@@ -228,7 +223,7 @@ pub const Render = struct {
     pub fn highlightTile(self: *Render, square: u6) void {
         const pos = self.getPosFromSquare(square);
 
-        const color = if (self.isWhiteTile(square)) self.ACTIVE_BLACK_TILE_COLOR else self.ACTIVE_WHITE_TILE_COLOR;
+        const color = if (self.isWhiteTile(square)) colors.HIGHLIGHT_BLACK else colors.HIGHLIGHT_WHITE;
 
         const x = self.offset.x + pos.x * self.tileSize;
         const y = self.offset.y + pos.y * self.tileSize;

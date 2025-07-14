@@ -1,6 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const view = @import("view.zig");
+const colors = @import("colors.zig");
 const rl = @import("raylib");
 const controller = @import("controller");
 const time = std.time;
@@ -19,15 +20,13 @@ const Move = core.types.Move;
 const Render = view.Render;
 const SelectedSquare = core.types.SelectedSquare;
 const GameController = controller.GameController;
+const GameState = controller.GameState;
 
 const SCREEN_WIDTH = 960;
 const SCREEN_HEIGHT = 720;
 
-const CHECK_HIGHLIGHT_COLOR = rl.Color.init(0xD3, 0x2F, 0x2F, 0xFF);
-
 pub const Interface = struct {
-    board: *Board,
-
+    board: Board,
     showSquareNumbers: bool = false,
     showAllPossibleMoves: bool = false,
     showPiecePossibleMoves: bool = true,
@@ -36,20 +35,21 @@ pub const Interface = struct {
     gameController: GameController = undefined,
     render: Render = undefined,
 
-    pub fn init(board: *Board) Interface {
+    pub fn init() Interface {
         return Interface{
-            .board = board,
+            .board = Board.init(),
         };
     }
 
     pub fn deinit(self: *Interface) void {
+        self.board.deinit();
         self.render.deinit();
         self.gameController.deinit();
     }
 
     fn setup(self: *Interface) void {
         self.render = Render.init();
-        self.gameController = GameController.init(self.board);
+        self.gameController = GameController.init(&self.board);
         self.gameController.setup();
     }
 
@@ -84,35 +84,36 @@ pub const Interface = struct {
     }
 
     fn draw(self: *Interface) void {
-        rl.clearBackground(rl.Color.init(48, 46, 43, 255));
+        rl.clearBackground(colors.INTERFACE_BACKGROUND);
         self.render.drawBoard();
 
-        if (self.gameController.selectedSquare.isSelected) {
-            self.render.highlightTile(self.gameController.selectedSquare.square);
+        // TODO: Change this == PlayerThinking interface
+        if (self.gameController.state == GameState.PlayerThinking and self.gameController.playerHandler.selectedSquare.isSelected) {
+            self.render.highlightTile(self.gameController.playerHandler.selectedSquare.square);
         }
 
-        if (core.utils.check.isKingInCheck(self.board, self.board.pieceToMove)) {
-            const kingSquare = core.utils.check.getKingSquare(self.board, self.board.pieceToMove);
+        if (core.utils.check.isKingInCheck(&self.board, self.board.pieceToMove)) {
+            const kingSquare = core.utils.check.getKingSquare(&self.board, self.board.pieceToMove);
             self.render.highlightTileColor(
                 kingSquare,
-                CHECK_HIGHLIGHT_COLOR,
+                colors.HIGHLIGHT_CHECK,
             );
         }
 
-        self.render.drawPieces(self.board);
+        self.render.drawPieces(&self.board);
 
         if (self.showSquareNumbers) {
             self.render.drawSquareNumbers();
         }
 
         if (self.showAllPossibleMoves) {
-            self.render.drawPossibleMoves(&self.gameController.moveGen.pseudoLegalMoves);
+            self.render.drawPossibleMoves(&self.gameController.engine.moveGen.pseudoLegalMoves);
         }
 
-        if (self.showPiecePossibleMoves and self.gameController.selectedSquare.isSelected) {
+        if (self.showPiecePossibleMoves and self.gameController.playerHandler.selectedSquare.isSelected) {
             self.render.drawPossibleMovesFromSquare(
-                &self.gameController.moveGen.pseudoLegalMoves,
-                self.gameController.selectedSquare.square,
+                &self.gameController.engine.moveGen.pseudoLegalMoves,
+                self.gameController.playerHandler.selectedSquare.square,
             );
         }
     }

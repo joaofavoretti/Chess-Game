@@ -32,7 +32,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     engine_mod.addImport("core", core_mod);
 
     // Controller library module
@@ -43,7 +42,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     controller_mod.addImport("core", core_mod);
     controller_mod.addImport("engine", engine_mod);
 
@@ -55,7 +53,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     view_mod.addImport("core", core_mod);
     view_mod.addImport("controller", controller_mod);
 
